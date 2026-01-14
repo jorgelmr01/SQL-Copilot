@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel_1768412065661_0.9710006855498207",
+    "from": {
+      "table": "purchases",
+      "column": "customer_id"
+    },
+    "to": {
+      "table": "customers",
+      "column": "customer_id"
+    },
+    "type": "many-to-one"
+  },
+  {
+    "id": "rel_1768412065661_0.8030443276818109",
+    "from": {
+      "table": "logins",
+      "column": "customer_id"
+    },
+    "to": {
+      "table": "customers",
+      "column": "customer_id"
+    },
+    "type": "many-to-one"
+  },
+  {
+    "id": "rel_1768412065661_0.2768983188525759",
+    "from": {
+      "table": "accounts",
+      "column": "customer_id"
+    },
+    "to": {
+      "table": "customers",
+      "column": "customer_id"
+    },
+    "type": "many-to-one"
+  },
+  {
+    "id": "rel_1768412781796_0.5545928713180771",
+    "from": {
+      "table": "logins",
+      "column": "customer_id"
+    },
+    "to": {
+      "table": "purchases",
+      "column": "customer_id"
+    },
+    "type": "many-to-one"
+  },
+  {
+    "id": "rel_1768412781796_0.579079482735744",
+    "from": {
+      "table": "accounts",
+      "column": "customer_id"
+    },
+    "to": {
+      "table": "purchases",
+      "column": "customer_id"
+    },
+    "type": "many-to-one"
+  }
+]

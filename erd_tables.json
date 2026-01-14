@@ -1,0 +1,91 @@
+[
+  {
+    "id": "table_1768412065661_0.1937461508095396",
+    "name": "customers",
+    "x": -239.626140301819,
+    "y": 188.41734028086,
+    "columns": [
+      {
+        "name": "customer_id",
+        "type": "INT",
+        "isPK": true
+      }
+    ],
+    "index": 0,
+    "vy": -0.05825315688405539,
+    "vx": -0.22673238575132687
+  },
+  {
+    "id": "table_1768412065661_0.5535614440079514",
+    "name": "purchases",
+    "x": 452.2017632603606,
+    "y": 277.21597934846454,
+    "columns": [
+      {
+        "name": "purchase_id",
+        "type": "INT",
+        "isPK": true
+      },
+      {
+        "name": "customer_id",
+        "type": "INT",
+        "isPK": false
+      },
+      {
+        "name": "purchase_date",
+        "type": "DATE",
+        "isPK": false
+      },
+      {
+        "name": "product_code",
+        "type": "VARCHAR",
+        "isPK": false
+      }
+    ],
+    "index": 1,
+    "vy": 0.06142812750780788,
+    "vx": 0.22572844125156835
+  },
+  {
+    "id": "table_1768412065661_0.7565713513206171",
+    "name": "logins",
+    "x": 85.6483023843885,
+    "y": 415.789843139346,
+    "columns": [
+      {
+        "name": "login_id",
+        "type": "INT",
+        "isPK": true
+      },
+      {
+        "name": "customer_id",
+        "type": "INT",
+        "isPK": false
+      }
+    ],
+    "index": 2,
+    "vy": 0.20970284971086284,
+    "vx": -0.05087614407519819
+  },
+  {
+    "id": "table_1768412065661_0.1536772750839217",
+    "name": "accounts",
+    "x": 266.4507114978902,
+    "y": -48.454560588189594,
+    "columns": [
+      {
+        "name": "customer_id",
+        "type": "INT",
+        "isPK": false
+      },
+      {
+        "name": "balance",
+        "type": "DECIMAL",
+        "isPK": false
+      }
+    ],
+    "index": 3,
+    "vy": -0.21287782033461536,
+    "vx": 0.0518800885749567
+  }
+]
