@@ -3,7 +3,7 @@
 <div align="center">
 
 ![SQL Copilot](https://img.shields.io/badge/SQL-Copilot-6366f1?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAzQzguMTMgMyA1IDQuMTMgNSA1LjVWMTguNUM1IDE5Ljg3IDguMTMgMjEgMTIgMjFTMTkgMTkuODcgMTkgMTguNVY1LjVDMTkgNC4xMyAxNS44NyAzIDEyIDNNMTIgNUMxNS44NyA1IDE3IDUuOTkgMTcgNi41QzE3IDcuMDEgMTUuODcgOCAxMiA4UzcgNy4wMSA3IDYuNUM3IDUuOTkgOC4xMyA1IDEyIDVNMTcgMTguNUMxNyAxOS4wMSAxNS44NyAyMCAxMiAyMFM3IDE5LjAxIDcgMTguNVYxNS4zMUM4LjEzIDE2LjEyIDkuOTggMTYuNSAxMiAxNi41UzE1Ljg3IDE2LjEyIDE3IDE1LjMxVjE4LjVNMTcgMTMuMDZDMTUuODcgMTMuODcgMTQuMDIgMTQuMjUgMTIgMTQuMjVTOC4xMyAxMy44NyA3IDEzLjA2VjkuODFDOC4xMyAxMC42MiA5Ljk4IDExIDEyIDExUzE1Ljg3IDEwLjYyIDE3IDkuODFWMTMuMDZaIi8+PC9zdmc+)
-![Version](https://img.shields.io/badge/version-1.0.0-22d3ee?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.2.0-22d3ee?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
 **Your AI-powered assistant for generating, optimizing, and managing SQL queries with an intelligent schema at your fingertips.**
@@ -46,8 +46,21 @@ A guided workflow that transforms natural language into production-ready SQL:
 
 - **Optimize**: Get performance improvements with clear explanations for each optimization
 - **Validate**: Scan queries for syntax errors with suggested fixes
-- **Format**: Transform messy SQL into clean, readable code
+- **Format**: Transform messy SQL into clean, readable, annotated code with inline comments
 - **Explain**: Get detailed breakdowns with summaries and visualizations
+- **Translate**: Convert queries between SQL dialects (Presto, Spark SQL, PySpark)
+
+### Multi-Dialect Support
+
+SQL Copilot supports multiple SQL dialects used in AWS:
+
+| Dialect | AWS Service | Use Case |
+|---------|-------------|----------|
+| **Presto SQL** | Athena, QuickSight | Ad-hoc queries, BI |
+| **Spark SQL** | EMR | Big data processing |
+| **PySpark** | EMR Serverless | DataFrame-based ETL jobs |
+
+All AI features are dialect-aware and generate syntax appropriate for your selected dialect.
 
 ### Schema ERD (Entity Relationship Diagram)
 
@@ -496,6 +509,35 @@ Please include:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Changelog
+
+### v0.2.0 (Current)
+
+**New Features:**
+- **SQL Dialect Support**: Added dialect selector for Presto SQL (Athena), Spark SQL (EMR), and PySpark (EMR Serverless)
+- **Translate Mode**: New tool to convert queries between different SQL dialects with detailed translation notes
+- **Enhanced Syntax Highlighting**: Comprehensive color-coded SQL highlighting with support for:
+  - Keywords, functions, strings, numbers, operators
+  - Comments (single-line and block)
+  - Dummy variables with distinct purple highlighting
+  - PySpark DataFrame methods
+- **Responsive 4K Layout**: Fluid design that adapts to widescreen and 4K displays
+- **Format with Annotations**: Format tool now adds inline comments explaining query logic
+
+**Improvements:**
+- **Stricter Variable Control**: Logic preview now declares ALL variables upfront; SQL generation only uses mapped variables
+- **Dialect-Aware AI**: All AI prompts include dialect context for accurate syntax generation
+- **Better Variable Mapping**: Comprehensive {{placeholder}} format with validation
+
+### v0.1.0
+
+- Initial release with SQL Generation, Optimize, Validate, Format, and Explain modes
+- Schema ERD with D3.js visualization
+- SQL Query Library with file system access
+- Welcome modal and documentation
 
 ---
 
