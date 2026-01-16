@@ -2187,9 +2187,21 @@
                 </div>
               </div>
             </div>
-            <div class="p-4 border-t border-surface-light flex justify-end gap-2">
-              <button onclick="hideProcessModal()" class="px-4 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Cancel</button>
-              <button onclick="confirmProcessToERD()" id="btn-confirm-process" class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors" disabled>Add to Schema</button>
+            <div class="p-4 border-t border-surface-light flex items-center justify-between gap-4">
+              <!-- Schema Mode Toggle -->
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-gray-500">Output Mode:</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="schema-mode-toggle" class="sr-only peer" onchange="toggleSchemaMode()">
+                  <div class="w-9 h-5 bg-surface-light peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-gray-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+                <span id="schema-mode-label" class="text-xs font-medium text-accent">Lite</span>
+                <span class="material-symbols-outlined text-xs text-gray-500 cursor-help" title="Lite mode: Minimal schema for SQL generation (smaller, faster). Full mode: Includes descriptions and all metadata.">help</span>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="hideProcessModal()" class="px-4 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Cancel</button>
+                <button onclick="confirmProcessToERD()" id="btn-confirm-process" class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors" disabled>Add to Schema</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2738,6 +2750,7 @@
       updateContextInfo();
       updateRecentQueries();
       checkFirstVisit(); // Show welcome modal on first visit
+      initSchemaMode(); // Initialize schema mode toggle
     });
 
     window.addEventListener('hashchange', () => {
@@ -7421,11 +7434,15 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
 
     function exportERDSchema(format) {
       if (format === 'json') {
-        const data = {
+        // Apply lite mode stripping if enabled (removes x/y, descriptions, redundant fields)
+        const rawData = {
           tables: ERDState.tables,
           relationships: ERDState.relationships
         };
-        downloadFile('schema.json', JSON.stringify(data, null, 2), 'application/json');
+        const data = stripSchemaForLiteMode(rawData);
+        const mode = getSchemaMode();
+        const filename = mode === 'lite' ? 'schema-lite.json' : 'schema.json';
+        downloadFile(filename, JSON.stringify(data, null, 2), 'application/json');
       } else if (format === 'csv') {
         const rows = [['table', 'column', 'type', 'description', 'primaryKey', 'nullable']];
         ERDState.tables.forEach(t => {
@@ -9056,6 +9073,161 @@ Infer column types from context. Identify JOINs as relationships.`;
       }
     }
 
+    // ==================== SCHEMA MODE (LITE/FULL) ====================
+    
+    /**
+     * Get current schema output mode (lite or full)
+     */
+    function getSchemaMode() {
+      return localStorage.getItem('sql_copilot_schema_mode') || 'lite';
+    }
+    
+    /**
+     * Toggle between lite and full schema modes
+     */
+    function toggleSchemaMode() {
+      const toggle = document.getElementById('schema-mode-toggle');
+      const label = document.getElementById('schema-mode-label');
+      const mode = toggle.checked ? 'full' : 'lite';
+      localStorage.setItem('sql_copilot_schema_mode', mode);
+      
+      if (mode === 'full') {
+        label.textContent = 'Full';
+        label.classList.remove('text-accent');
+        label.classList.add('text-primary');
+      } else {
+        label.textContent = 'Lite';
+        label.classList.remove('text-primary');
+        label.classList.add('text-accent');
+      }
+    }
+    
+    /**
+     * Initialize schema mode toggle from localStorage
+     */
+    function initSchemaMode() {
+      const mode = getSchemaMode();
+      const toggle = document.getElementById('schema-mode-toggle');
+      const label = document.getElementById('schema-mode-label');
+      
+      if (toggle) {
+        toggle.checked = mode === 'full';
+        if (mode === 'full') {
+          label.textContent = 'Full';
+          label.classList.remove('text-accent');
+          label.classList.add('text-primary');
+        }
+      }
+    }
+    
+    /**
+     * Strip schema data for Lite mode - removes redundant/inferrable fields
+     * This reduces JSON size by 70-80% while keeping all info needed for SQL generation
+     */
+    function stripSchemaForLiteMode(schema) {
+      const mode = getSchemaMode();
+      if (mode !== 'lite') return schema;
+      
+      const stripped = {
+        tables: schema.tables.map(table => {
+          // Base table fields (always kept)
+          const strippedTable = {
+            id: table.id,
+            name: table.name,
+            tableType: table.tableType,
+            schema_source: table.schema_source,
+            is_stub: table.is_stub,
+            is_aggregated: table.is_aggregated,
+            grain_columns: table.grain_columns,
+            unique_key: table.unique_key
+          };
+          
+          // Strip layout/physics fields (x, y, vx, vy, index) - not needed for SQL generation
+          // These are only used for ERD visual rendering
+          
+          // In full mode, keep primary_key and filters
+          if (mode === 'full' || table.primary_key?.length) {
+            strippedTable.primary_key = table.primary_key;
+          }
+          if (table.filters_normalized?.length) {
+            strippedTable.filters_normalized = table.filters_normalized;
+          }
+          
+          // Strip columns
+          strippedTable.columns = (table.columns || []).map(col => {
+            // Lite column: only essential fields for SQL generation
+            const strippedCol = {
+              name: col.name,
+              type: col.type,
+              semantic_role: col.semantic_role,
+              aggregation_type: col.aggregation_type,
+              nullable: col.nullable,
+              is_grain: col.is_grain
+            };
+            
+            // Keep expression_ir as source of truth (don't keep SQL variants or renderings)
+            if (col.expression_ir) {
+              strippedCol.expression_ir = col.expression_ir;
+            }
+            
+            // Keep source_columns for lineage
+            if (col.source_columns?.length) {
+              strippedCol.source_columns = col.source_columns;
+            }
+            
+            return strippedCol;
+          });
+          
+          return strippedTable;
+        }),
+        relationships: schema.relationships.map(rel => {
+          // Essential relationship fields
+          const strippedRel = {
+            id: rel.id,
+            from: rel.from,
+            to: rel.to,
+            type: rel.type
+          };
+          
+          // For joins, keep essential join metadata
+          if (rel.type === 'join') {
+            strippedRel.join_type = rel.join_type;
+            if (rel.on_sql) strippedRel.on_sql = rel.on_sql;
+          }
+          
+          // For lineage, keep source_filters if present
+          if (rel.type === 'lineage' && rel.source_filters?.length) {
+            strippedRel.source_filters = rel.source_filters;
+          }
+          
+          return strippedRel;
+        })
+      };
+      
+      return stripped;
+    }
+    
+    /**
+     * Strip column data for Lite mode (used during confirmProcessToERD)
+     */
+    function stripColumnForLiteMode(col) {
+      const mode = getSchemaMode();
+      if (mode !== 'lite') return col;
+      
+      return {
+        id: col.id,
+        name: col.name,
+        type: col.type,
+        semantic_role: col.semantic_role,
+        aggregation_type: col.aggregation_type,
+        nullable: col.nullable,
+        is_grain: col.is_grain,
+        expression_ir: col.expression_ir,
+        source_columns: col.source_columns
+        // Stripped: description, expression_sql*, renderings, compatible_grains, requires_group_by, isPK, isFK, etc.
+      };
+    }
+    
     // ==================== PROCESS TO ERD ====================
     async function processSelectedToERD() {
       if (LibraryState.selectedFiles.size === 0) return;
@@ -9483,32 +9655,89 @@ Infer column types from context. Identify JOINs as relationships.`;
           else if (originalName.includes('silver.')) tableType = 'silver';
           else if (originalName.includes('core.')) tableType = 'raw';
           
-          // Create stub columns from referenced join keys
+          // Create stub columns from referenced join keys with improved type inference
           const stubColumns = Array.from(columns).filter(c => c && !c.includes('(')).map(colName => {
             const colKey = `${originalName.toLowerCase()}.${colName.toLowerCase()}`;
+            const lowerName = colName.toLowerCase();
+            
+            // Enhanced heuristic type inference based on column name patterns
+            let inferredType = 'VARCHAR'; // Default instead of UNKNOWN
+            let isPK = false;
+            let isNullable = null; // Unknown by default
+            
+            // ID columns - typically BIGINT primary keys
+            if (lowerName.endsWith('_id') || lowerName === 'id') {
+              inferredType = 'BIGINT';
+              isPK = true;
+              isNullable = false;
+            }
+            // Timestamp columns
+            else if (lowerName.endsWith('_at') || lowerName.endsWith('_ts') || 
+                     lowerName.includes('timestamp') || lowerName === 'created' || lowerName === 'updated') {
+              inferredType = 'TIMESTAMP';
+            }
+            // Date columns
+            else if (lowerName.endsWith('_dt') || lowerName.endsWith('_date') || 
+                     lowerName === 'date' || lowerName.includes('_day')) {
+              inferredType = 'DATE';
+            }
+            // Amount/money columns
+            else if (lowerName.endsWith('_amt') || lowerName.endsWith('_amount') || 
+                     lowerName.includes('price') || lowerName.includes('cost') || 
+                     lowerName.includes('revenue') || lowerName.includes('fee')) {
+              inferredType = 'DECIMAL(18,2)';
+            }
+            // Count columns
+            else if (lowerName.endsWith('_cnt') || lowerName.endsWith('_count') || lowerName === 'count') {
+              inferredType = 'BIGINT';
+            }
+            // Boolean/flag columns
+            else if (lowerName.endsWith('_flag') || lowerName.startsWith('is_') || 
+                     lowerName.startsWith('has_') || lowerName.endsWith('_bool')) {
+              inferredType = 'BOOLEAN';
+            }
+            // Code columns (short strings)
+            else if (lowerName.endsWith('_code') || lowerName.endsWith('_type') || 
+                     lowerName === 'status' || lowerName === 'state') {
+              inferredType = 'VARCHAR';
+            }
+            // Rate/percentage columns
+            else if (lowerName.endsWith('_rate') || lowerName.endsWith('_pct') || 
+                     lowerName.endsWith('_percent') || lowerName.endsWith('_ratio')) {
+              inferredType = 'DECIMAL(10,6)';
+            }
+            
+            const isLiteMode = getSchemaMode() === 'lite';
+            
             return {
               id: `col_${stableHash(colKey)}`,
               name: colName,
-              type: colName.endsWith('_id') ? 'BIGINT' : 
-                    colName.endsWith('_at') || colName.endsWith('_ts') ? 'TIMESTAMP' :
-                    colName.endsWith('_dt') ? 'DATE' : 'VARCHAR',
-              description: 'Join key (inferred from query)',
+              type: inferredType,
+              // Skip description in lite mode
+              ...(isLiteMode ? {} : { description: 'Inferred from query' }),
               inferred_from_query: true,
-              isPK: colName.endsWith('_id'),
-              isFK: false,
-              nullable: colName.endsWith('_id') ? false : null // Unknown for non-PK
+              ...(isLiteMode ? {} : { isPK: isPK, isFK: false }),
+              nullable: isNullable,
+              semantic_role: 'dimension'
             };
           });
           
-          result.tables.push({
+          const isLiteMode = getSchemaMode() === 'lite';
+          const stubTable = {
             id: `table_${stableHash(originalName.toLowerCase())}`,
             name: originalName,
-            description: 'Source table (inferred from relationships)',
             tableType: tableType,
             schema_source: 'query_inferred',
             is_stub: true,
             columns: stubColumns
-          });
+          };
+          
+          // Add description only in full mode
+          if (!isLiteMode) {
+            stubTable.description = 'Source table (inferred from relationships)';
+          }
+          
+          result.tables.push(stubTable);
           
           console.log(`Created stub table: ${originalName} with ${stubColumns.length} inferred columns`);
         }
@@ -9526,7 +9755,48 @@ Infer column types from context. Identify JOINs as relationships.`;
         return `-- File: ${f.path}\n${content}`;
       }).join('\n\n');
       
-      const systemPrompt = `SQL schema analyzer for multi-dialect SQL generation. Extract COMPLETE metadata with dialect-neutral IR. Output ONLY valid JSON.
+      // Use different prompts based on schema mode (lite = faster, cheaper, smaller output)
+      const schemaMode = getSchemaMode();
+      
+      // LITE MODE: Minimal output for SQL generation - no descriptions, no renderings
+      const litePrompt = `SQL schema analyzer. Extract MINIMAL metadata for SQL generation. Output ONLY valid JSON. NO descriptions.
+
+## RULES
+- DO NOT create tables for CTE aliases. Only emit REAL tables with schema.table format
+- For CTAS: columns from final SELECT only, set is_aggregated, grain_columns
+- For columns: name, type, semantic_role, aggregation_type, nullable, is_grain, expression_ir (if computed), source_columns
+- expression_ir uses ops: avg, sum, count, count_distinct, case, divide, multiply, timestamp_diff_seconds, date_trunc, coalesce, nullif
+- Stub tables: minimal columns with type inference from name (*_id=BIGINT, *_at/*_ts=TIMESTAMP, *_dt=DATE, *_amt=DECIMAL)
+- Relationships: lineage (table-to-table with source_filters) and join (with join_type, on_sql)
+
+## OUTPUT FORMAT
+{
+  "tables":[{
+    "name":"schema.table",
+    "tableType":"raw|gold|silver",
+    "schema_source":"ctas_output|query_inferred",
+    "is_stub":false,
+    "is_aggregated":true,
+    "grain_columns":["dim1","dim2"],
+    "columns":[{
+      "name":"metric",
+      "type":"BIGINT",
+      "semantic_role":"measure",
+      "aggregation_type":"count_distinct",
+      "expression_ir":{"op":"count_distinct","args":["core.users.user_id"]},
+      "source_columns":["core.users.user_id"],
+      "is_grain":false,
+      "nullable":false
+    }]
+  }],
+  "relationships":[
+    {"from":{"table":"output"},"to":{"table":"source"},"type":"lineage","source_filters":["posted_at >= DATE '2025-01-01'"]},
+    {"from":{"table":"t1","column":"id"},"to":{"table":"t2","column":"id"},"type":"join","join_type":"LEFT","on_sql":"t1.id = t2.id"}
+  ]
+}`;
+
+      // FULL MODE: Complete metadata with descriptions and renderings
+      const fullPrompt = `SQL schema analyzer for multi-dialect SQL generation. Extract COMPLETE metadata with dialect-neutral IR. Output ONLY valid JSON.
 
 ## CRITICAL RULES
 
@@ -9631,6 +9901,8 @@ b) Join (type:"join"): \`relationship_role:"join_path"\`, include join_type, on_
 
 ## TABLE TYPE INFERENCE
 raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executive, black=ML`;
+
+      const systemPrompt = schemaMode === 'lite' ? litePrompt : fullPrompt;
 
       const maxRetries = 2;
       let lastError = null;
@@ -9954,10 +10226,28 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
         const tableDescInput = document.querySelector(`[data-process-table-desc="${idx}"]`);
         const tableDescription = tableDescInput?.value || table.description || '';
         
-        // Get edited column descriptions and preserve all metadata (including IR and renderings)
+        // Get edited column descriptions and preserve metadata based on schema mode
+        const isLiteMode = getSchemaMode() === 'lite';
         const columnsWithDescriptions = (table.columns || []).map((col, ci) => {
           const colDescInput = document.querySelector(`[data-process-col-desc="${idx}-${ci}"]`);
           const colKey = `${table.name.toLowerCase()}.${col.name.toLowerCase()}`;
+          
+          // Lite mode: minimal fields for SQL generation
+          if (isLiteMode) {
+            return {
+              id: col.id || `col_${stableHash(colKey)}`,
+              name: col.name,
+              type: col.type || 'VARCHAR',
+              semantic_role: col.semantic_role,
+              aggregation_type: col.aggregation_type,
+              expression_ir: col.expression_ir,
+              source_columns: col.source_columns,
+              is_grain: col.is_grain || false,
+              nullable: col.nullable !== undefined ? col.nullable : null
+            };
+          }
+          
+          // Full mode: preserve all metadata
           return {
             id: col.id || `col_${stableHash(colKey)}`,
             name: col.name,
@@ -10015,25 +10305,37 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
           if (tableType) existing.tableType = tableType;
         } else {
           // Add new table with descriptions (using stable hash-based ID)
-          ERDState.tables.push({
+          // Layout fields (x, y) are for ERD rendering only, always included
+          const newTable = {
             id: `table_${stableHash(table.name.toLowerCase())}`,
             name: table.name,
-            description: tableDescription,
             tableType: tableType,
             schema_source: table.schema_source || (table.is_stub ? 'query_inferred' : 'ctas_output'),
             is_stub: table.is_stub || false,
             is_aggregated: table.is_aggregated || false,
             grain_columns: table.grain_columns || [],
             unique_key: table.unique_key || [],
-            primary_key: table.primary_key || table.grain_columns || [],
-            // Filters - both original and normalized
-            filters_original: table.filters_original || table.filters || [],
-            filters_normalized: table.filters_normalized || [],
-            filters: table.filters || [], // Legacy
+            // Layout for ERD visualization (not exported in lite mode)
             x: 100 + (ERDState.tables.length % 4) * 250,
             y: 100 + Math.floor(ERDState.tables.length / 4) * 200,
             columns: columnsWithDescriptions
-          });
+          };
+          
+          // Full mode: add additional metadata
+          if (!isLiteMode) {
+            newTable.description = tableDescription;
+            newTable.primary_key = table.primary_key || table.grain_columns || [];
+            newTable.filters_original = table.filters_original || table.filters || [];
+            newTable.filters_normalized = table.filters_normalized || [];
+            newTable.filters = table.filters || [];
+          } else {
+            // Lite mode: only keep normalized filters if present
+            if (table.filters_normalized?.length) {
+              newTable.filters_normalized = table.filters_normalized;
+            }
+          }
+          
+          ERDState.tables.push(newTable);
         }
       });
       
@@ -10062,28 +10364,40 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
         if (!exists) {
           // Generate stable hash-based ID for relationship
           const relKey = `${rel.type || 'rel'}:${rel.from?.table || ''}:${rel.from?.column || ''}:${rel.to?.table || ''}:${rel.to?.column || ''}`;
+          
+          // Base relationship (lite mode)
           const newRel = {
             id: `rel_${stableHash(relKey)}`,
             from: rel.from,
             to: rel.to,
-            type: rel.type || 'many-to-one',
-            relationship_role: rel.relationship_role || (rel.type === 'lineage' ? 'data_dependency' : 'join_path'),
-            // Join metadata
-            join_type: rel.join_type,
-            on_sql: rel.on_sql,
-            on_sql_normalized: rel.on_sql_normalized,
-            // Cardinality with confidence
-            cardinality: rel.cardinality || 'unknown',
-            cardinality_confidence: rel.cardinality_confidence || 0,
-            cardinality_basis: rel.cardinality_basis || 'unknown',
-            confidence: rel.confidence,
-            // Source-specific filters for lineage edges
-            source_filters: rel.source_filters
+            type: rel.type || 'many-to-one'
           };
-          // Include join_keys if present (legacy)
-          if (rel.join_keys) {
-            newRel.join_keys = rel.join_keys;
+          
+          // For joins, keep essential join metadata
+          if (rel.type === 'join') {
+            newRel.join_type = rel.join_type;
+            if (rel.on_sql) newRel.on_sql = rel.on_sql;
           }
+          
+          // For lineage, keep source_filters if present
+          if (rel.type === 'lineage' && rel.source_filters?.length) {
+            newRel.source_filters = rel.source_filters;
+          }
+          
+          // Full mode: add all metadata
+          if (!isLiteMode) {
+            newRel.relationship_role = rel.relationship_role || (rel.type === 'lineage' ? 'data_dependency' : 'join_path');
+            newRel.on_sql_normalized = rel.on_sql_normalized;
+            newRel.cardinality = rel.cardinality || 'unknown';
+            newRel.cardinality_confidence = rel.cardinality_confidence || 0;
+            newRel.cardinality_basis = rel.cardinality_basis || 'unknown';
+            newRel.confidence = rel.confidence;
+            // Include join_keys if present (legacy)
+            if (rel.join_keys) {
+              newRel.join_keys = rel.join_keys;
+            }
+          }
+          
           ERDState.relationships.push(newRel);
         }
       });

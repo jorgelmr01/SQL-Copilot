@@ -3,7 +3,7 @@
 <div align="center">
 
 ![SQL Copilot](https://img.shields.io/badge/SQL-Copilot-6366f1?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAzQzguMTMgMyA1IDQuMTMgNSA1LjVWMTguNUM1IDE5Ljg3IDguMTMgMjEgMTIgMjFTMTkgMTkuODcgMTkgMTguNVY1LjVDMTkgNC4xMyAxNS44NyAzIDEyIDNNMTIgNUMxNS44NyA1IDE3IDUuOTkgMTcgNi41QzE3IDcuMDEgMTUuODcgOCAxMiA4UzcgNy4wMSA3IDYuNUM3IDUuOTkgOC4xMyA1IDEyIDVNMTcgMTguNUMxNyAxOS4wMSAxNS44NyAyMCAxMiAyMFM3IDE5LjAxIDcgMTguNVYxNS4zMUM4LjEzIDE2LjEyIDkuOTggMTYuNSAxMiAxNi41UzE1Ljg3IDE2LjEyIDE3IDE1LjMxVjE4LjVNMTcgMTMuMDZDMTUuODcgMTMuODcgMTQuMDIgMTQuMjUgMTIgMTQuMjVTOC4xMyAxMy44NyA3IDEzLjA2VjkuODFDOC4xMyAxMC42MiA5Ljk4IDExIDEyIDExUzE1Ljg3IDEwLjYyIDE3IDkuODFWMTMuMDZaIi8+PC9zdmc+)
-![Version](https://img.shields.io/badge/version-0.2.3-22d3ee?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.2.4-22d3ee?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
 **Your AI-powered assistant for generating, optimizing, and managing SQL queries with an intelligent schema at your fingertips.**
@@ -538,7 +538,42 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-### v1.2.1 (Current)
+### v0.2.4 (Current)
+
+**Schema Lite Mode - 70-80% Size Reduction:**
+
+- **Lite/Full Mode Toggle**: New toggle in "Process to ERD" modal
+  - **Lite mode** (default): Minimal schema for SQL generation - faster, cheaper, smaller
+  - **Full mode**: Complete metadata with descriptions and renderings
+
+- **Stripped Fields in Lite Mode**:
+  - Layout fields (x, y, vx, vy, index) - not needed for SQL generation
+  - Per-column redundant fields (compatible_grains, requires_group_by, isPK, isFK)
+  - Descriptions - can be generated on-demand
+  - Expression SQL variants - only expression_ir kept as source of truth
+  - Renderings - generated on-demand via `renderExpressionForDialect()`
+
+- **Improved Type Inference for Stub Tables**:
+  - `*_id` columns → BIGINT (with isPK flag)
+  - `*_at`, `*_ts` columns → TIMESTAMP
+  - `*_dt`, `*_date` columns → DATE
+  - `*_amt`, `*_amount`, price/cost → DECIMAL(18,2)
+  - `*_cnt`, `*_count` columns → BIGINT
+  - `*_flag`, `is_*`, `has_*` columns → BOOLEAN
+  - `*_rate`, `*_pct` columns → DECIMAL(10,6)
+  - Default → VARCHAR (instead of UNKNOWN)
+
+- **Optimized AI Prompt**:
+  - Lite mode uses minimal prompt (~50% shorter)
+  - No descriptions requested
+  - No renderings requested
+  - Focus on structural metadata only
+
+- **Export Respects Mode**:
+  - JSON export strips layout/redundant fields in lite mode
+  - Filename indicates mode: `schema-lite.json` vs `schema.json`
+
+### v1.2.1
 
 **Schema Extraction Overhaul - Production Ready:**
 
