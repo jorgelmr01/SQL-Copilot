@@ -3,7 +3,7 @@
 <div align="center">
 
 ![SQL Copilot](https://img.shields.io/badge/SQL-Copilot-6366f1?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAzQzguMTMgMyA1IDQuMTMgNSA1LjVWMTguNUM1IDE5Ljg3IDguMTMgMjEgMTIgMjFTMTkgMTkuODcgMTkgMTguNVY1LjVDMTkgNC4xMyAxNS44NyAzIDEyIDNNMTIgNUMxNS44NyA1IDE3IDUuOTkgMTcgNi41QzE3IDcuMDEgMTUuODcgOCAxMiA4UzcgNy4wMSA3IDYuNUM3IDUuOTkgOC4xMyA1IDEyIDVNMTcgMTguNUMxNyAxOS4wMSAxNS44NyAyMCAxMiAyMFM3IDE5LjAxIDcgMTguNVYxNS4zMUM4LjEzIDE2LjEyIDkuOTggMTYuNSAxMiAxNi41UzE1Ljg3IDE2LjEyIDE3IDE1LjMxVjE4LjVNMTcgMTMuMDZDMTUuODcgMTMuODcgMTQuMDIgMTQuMjUgMTIgMTQuMjVTOC4xMyAxMy44NyA3IDEzLjA2VjkuODFDOC4xMyAxMC42MiA5Ljk4IDExIDEyIDExUzE1Ljg3IDEwLjYyIDE3IDkuODFWMTMuMDZaIi8+PC9zdmc+)
-![Version](https://img.shields.io/badge/version-0.2.0-22d3ee?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.2.3-22d3ee?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
 **Your AI-powered assistant for generating, optimizing, and managing SQL queries with an intelligent schema at your fingertips.**
@@ -317,11 +317,33 @@ AppState = {
 ERDState = {
   tables: [
     {
-      id: string,
+      id: string,              // Deterministic hash-based ID
       name: string,
-      tableType: string,  // Raw, Silver, Gold, etc.
+      description: string,
+      tableType: string,       // raw, silver, gold, diamond, black, prediction
+      schema_source: string,   // ctas_output, query_inferred
+      is_stub: boolean,        // True for source tables inferred from queries
+      is_aggregated: boolean,  // True if created with GROUP BY
+      grain_columns: string[], // Composite key columns
+      unique_key: string[],    // Same as grain_columns for aggregated tables
+      filters: string[],       // WHERE conditions from the query
       columns: [
-        { name: string, type: string, isPrimaryKey: boolean, isForeignKey: boolean }
+        {
+          id: string,
+          name: string,
+          type: string,
+          description: string,
+          semantic_role: string,      // dimension | measure
+          aggregation_type: string,   // count_distinct, sum, avg, ratio, etc.
+          expression_sql: string,     // Exact SQL expression
+          source_columns: string[],   // Fully qualified source columns
+          inferred_from_query: boolean,
+          type_confidence: number,    // 0-1
+          inferred_from: string,      // Source expression for derived types
+          isPK: boolean,
+          isFK: boolean,
+          nullable: boolean | null    // null = unknown
+        }
       ],
       x: number,
       y: number
@@ -329,12 +351,14 @@ ERDState = {
   ],
   relationships: [
     {
-      id: string,
-      sourceTable: string,
-      sourceColumn: string,
-      targetTable: string,
-      targetColumn: string,
-      type: string  // one-to-one, one-to-many, many-to-many
+      id: string,              // Deterministic hash-based ID
+      from: { table: string, column: string },
+      to: { table: string, column: string },
+      type: string,            // lineage, join, many-to-one, etc.
+      join_type: string,       // LEFT, INNER, RIGHT (for joins)
+      on_sql: string,          // Exact ON clause
+      cardinality: string,     // 1_to_many, many_to_1, 1_to_1
+      confidence: number       // 0-1
     }
   ],
   selectedTable: string | null,
@@ -514,7 +538,49 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-### v0.2.0 (Current)
+### v1.2.1 (Current)
+
+**Schema Extraction Overhaul - Production Ready:**
+
+- **Column-Level Lineage**: Each computed column now includes:
+  - `semantic_role`: dimension or measure classification
+  - `aggregation_type`: count_distinct, sum, avg, ratio, etc.
+  - `expression_sql`: exact SQL expression for reproducibility
+  - `source_columns`: fully qualified column references
+  
+- **Grain Metadata**: Aggregated tables now capture:
+  - `grain_columns`: GROUP BY columns that form the composite key
+  - `unique_key`: Explicit unique key for downstream joins
+  - `filters`: Captured WHERE conditions for query reproducibility
+
+- **Dialect-Aware Type Inference**:
+  - DATE_TRUNC correctly returns TIMESTAMP (not DATE) for Presto
+  - NUMERIC normalized to DECIMAL(38,10) for Presto/Spark
+  - Type confidence scores for derived columns
+  - PySpark type mappings (IntegerType, StringType, etc.)
+
+- **Enhanced Join Metadata**:
+  - `join_type`: LEFT, INNER, RIGHT
+  - `on_sql`: Exact ON clause expression
+  - `cardinality`: 1_to_many, many_to_1, 1_to_1
+
+- **Smart Nullability Inference**:
+  - COUNT expressions: always NOT NULL
+  - SUM(COALESCE(x,0)): NOT NULL
+  - Ratios with NULLIF: nullable (division by zero)
+  - PKs enforced as NOT NULL
+
+- **Deterministic IDs**: Hash-based stable IDs for tables, columns, and relationships (enables versioning/diffing)
+
+- **CTE Filtering**: CTE aliases (k, bu, ac, ff, ft) no longer pollute the schema as fake tables
+
+- **UI Enhancements**:
+  - Filters section in table side panel
+  - Semantic role badges (M=Measure, D=Dimension)
+  - Expression SQL tooltips
+  - Aggregation type display
+
+### v0.2.0
 
 **New Features:**
 - **SQL Dialect Support**: Added dialect selector for Presto SQL (Athena), Spark SQL (EMR), and PySpark (EMR Serverless)

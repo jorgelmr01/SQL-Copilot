@@ -1,0 +1,17 @@
+# Local testing files
+Tests/
+
+# IDE and editor files
+.cursor/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local ERD data (user-specific)
+erd_tables.json
+erd_relationships.json

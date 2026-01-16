@@ -408,6 +408,25 @@
     .erd-table-node.highlighted {
       filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.5));
     }
+    /* Stub table styling - dashed border, reduced opacity */
+    .erd-table-node.stub {
+      opacity: 0.7;
+    }
+    .erd-table-node.stub .erd-table-border {
+      stroke-dasharray: 6 3;
+      stroke: #6b7280;
+    }
+    .erd-table-node.stub .erd-table-header {
+      fill: #374151;
+    }
+    .erd-table-node.stub .erd-table-title {
+      fill: #9ca3af;
+    }
+    /* Aggregated table styling - thicker border */
+    .erd-table-node.aggregated .erd-table-border {
+      stroke-width: 2;
+      stroke: #f59e0b;
+    }
     .erd-column-row:hover {
       fill: rgba(99, 102, 241, 0.1);
     }
@@ -426,6 +445,35 @@
     }
     .erd-relationship-line.selected {
       stroke: #22d3ee;
+      stroke-width: 3;
+    }
+    /* Lineage relationships - dashed green for data flow */
+    .erd-relationship-line.lineage {
+      stroke: #22c55e;
+      stroke-dasharray: 8 4;
+      stroke-width: 2;
+    }
+    .erd-relationship-line.lineage:hover {
+      stroke: #4ade80;
+      stroke-width: 3;
+    }
+    /* Join condition relationships - dotted orange for dimension joins */
+    .erd-relationship-line.join-condition {
+      stroke: #f59e0b;
+      stroke-dasharray: 3 3;
+      stroke-width: 2;
+    }
+    .erd-relationship-line.join-condition:hover {
+      stroke: #fbbf24;
+      stroke-width: 3;
+    }
+    /* Join relationships - solid blue for source table connections */
+    .erd-relationship-line.join {
+      stroke: #3b82f6;
+      stroke-width: 2;
+    }
+    .erd-relationship-line.join:hover {
+      stroke: #60a5fa;
       stroke-width: 3;
     }
     .erd-relationship-label {
@@ -2256,6 +2304,12 @@
               
               <!-- Table Editor Content -->
               <div id="side-panel-table-editor" class="flex-1 overflow-auto p-4 space-y-4">
+                <!-- Stub/Aggregated indicators -->
+                <div id="side-panel-table-badges" class="flex flex-wrap gap-2 view-hidden">
+                  <span id="side-panel-stub-badge" class="view-hidden px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full">Source (Stub)</span>
+                  <span id="side-panel-agg-badge" class="view-hidden px-2 py-1 bg-amber-900/50 text-amber-400 text-xs rounded-full">Aggregated</span>
+                </div>
+                
                 <div>
                   <label class="block text-xs text-gray-500 mb-1">Table Name</label>
                   <input type="text" id="side-panel-table-name" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary">
@@ -2275,6 +2329,24 @@
                 <div>
                   <label class="block text-xs text-gray-500 mb-1">Description</label>
                   <textarea id="side-panel-table-desc" rows="2" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"></textarea>
+                </div>
+                
+                <!-- Grain Columns (for aggregated tables) -->
+                <div id="side-panel-grain-section" class="view-hidden">
+                  <label class="block text-xs text-gray-500 mb-1">Grain / Composite Key</label>
+                  <div id="side-panel-grain-columns" class="flex flex-wrap gap-1 p-2 bg-surface-light rounded-lg min-h-[32px]">
+                    <!-- Grain columns will be rendered here -->
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">GROUP BY columns that define the unique key</p>
+                </div>
+                
+                <!-- Filters Section (for aggregated/output tables) -->
+                <div id="side-panel-filters-section" class="view-hidden">
+                  <label class="block text-xs text-gray-500 mb-1">Query Filters</label>
+                  <div id="side-panel-filters" class="space-y-1 p-2 bg-surface-light rounded-lg text-xs font-mono">
+                    <!-- Filters will be rendered here -->
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">WHERE conditions from the query</p>
                 </div>
                 
                 <div class="border-t border-surface-light pt-4">
@@ -2310,15 +2382,31 @@
                 <div>
                   <label class="block text-xs text-gray-500 mb-1">Relationship Type</label>
                   <select id="side-panel-rel-type" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
-                    <option value="one-to-one">One to One (1:1)</option>
-                    <option value="one-to-many">One to Many (1:N)</option>
-                    <option value="many-to-one">Many to One (N:1)</option>
-                    <option value="many-to-many">Many to Many (N:M)</option>
+                    <optgroup label="Foreign Key">
+                      <option value="one-to-one">One to One (1:1)</option>
+                      <option value="one-to-many">One to Many (1:N)</option>
+                      <option value="many-to-one">Many to One (N:1)</option>
+                      <option value="many-to-many">Many to Many (N:M)</option>
+                    </optgroup>
+                    <optgroup label="Data Flow">
+                      <option value="lineage">Lineage (depends on)</option>
+                    </optgroup>
+                    <optgroup label="Join Condition">
+                      <option value="join_condition">Join Condition (dimension/time)</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>
                   <label class="block text-xs text-gray-500 mb-1">Label (optional)</label>
                   <input type="text" id="side-panel-rel-label" placeholder="e.g., belongs to" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                </div>
+                
+                <!-- Join Conditions Section (for lineage relationships) -->
+                <div id="side-panel-join-conditions" class="view-hidden border-t border-surface-light pt-4">
+                  <label class="block text-xs text-gray-500 mb-2">Join Conditions</label>
+                  <div id="side-panel-join-list" class="space-y-2">
+                    <!-- Join conditions will be rendered here -->
+                  </div>
                 </div>
                 
                 <div class="flex gap-2 pt-4 border-t border-surface-light">
@@ -2983,6 +3071,299 @@
       AppState.chatHistory = [];
       document.getElementById('query-input').value = '';
       navigateToMode('generate');
+    }
+
+    // ==================== UTILITY FUNCTIONS ====================
+    
+    /**
+     * Generate a stable hash from a string for deterministic IDs
+     * This ensures IDs are consistent across runs for the same content
+     */
+    function stableHash(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0; // Convert to 32-bit integer
+      }
+      return Math.abs(hash).toString(36);
+    }
+    
+    /**
+     * Normalize SQL types for the specified dialect
+     * Presto: DATE_TRUNC returns TIMESTAMP, use DECIMAL
+     * Spark: Similar to Presto
+     * PySpark: Uses Python-style types
+     */
+    function normalizeTypeForDialect(type, dialect, context = {}) {
+      const upperType = (type || 'VARCHAR').toUpperCase();
+      
+      // Normalize NUMERIC to DECIMAL for Presto/Spark
+      if (upperType === 'NUMERIC' || upperType.startsWith('NUMERIC(')) {
+        if (dialect === 'presto' || dialect === 'spark') {
+          return 'DECIMAL(38,10)';
+        } else if (dialect === 'pyspark') {
+          return 'DecimalType(38,10)';
+        }
+      }
+      
+      // DATE_TRUNC returns TIMESTAMP not DATE (unless explicitly cast)
+      if (context.inferred_from && context.inferred_from.toLowerCase().includes('date_trunc')) {
+        if (!context.inferred_from.toLowerCase().includes('cast') && 
+            !context.inferred_from.toLowerCase().includes('::date')) {
+          return 'TIMESTAMP';
+        }
+      }
+      
+      // Normalize common type aliases
+      if (upperType === 'INT' || upperType === 'INTEGER') {
+        return dialect === 'pyspark' ? 'IntegerType()' : 'INTEGER';
+      }
+      if (upperType === 'BIGINT') {
+        return dialect === 'pyspark' ? 'LongType()' : 'BIGINT';
+      }
+      if (upperType === 'STRING' || upperType === 'TEXT') {
+        return dialect === 'pyspark' ? 'StringType()' : 'VARCHAR';
+      }
+      if (upperType === 'DOUBLE' || upperType === 'FLOAT') {
+        return dialect === 'pyspark' ? 'DoubleType()' : 'DOUBLE';
+      }
+      if (upperType === 'BOOLEAN' || upperType === 'BOOL') {
+        return dialect === 'pyspark' ? 'BooleanType()' : 'BOOLEAN';
+      }
+      
+      return upperType;
+    }
+    
+    /**
+     * Render an expression IR to dialect-specific SQL
+     * @param {Object} ir - The expression IR (AST)
+     * @param {string} dialect - 'presto', 'spark_sql', or 'pyspark'
+     * @returns {string} - The rendered SQL expression
+     */
+    function renderExpressionForDialect(ir, dialect = 'presto') {
+      if (!ir) return '';
+      
+      // If it's a string (column reference), return as-is
+      if (typeof ir === 'string') {
+        // Extract just the column name for pyspark
+        if (dialect === 'pyspark') {
+          const parts = ir.split('.');
+          return `F.col('${parts[parts.length - 1]}')`;
+        }
+        // For SQL dialects, use the last part (column name)
+        const parts = ir.split('.');
+        return parts[parts.length - 1];
+      }
+      
+      // If it's a number, return as-is
+      if (typeof ir === 'number') {
+        return ir.toString();
+      }
+      
+      // If it's null, return NULL
+      if (ir === null) {
+        return dialect === 'pyspark' ? 'F.lit(None)' : 'NULL';
+      }
+      
+      const op = ir.op;
+      const args = ir.args || [];
+      
+      // Recursively render arguments
+      const renderedArgs = args.map(a => renderExpressionForDialect(a, dialect));
+      
+      switch (op) {
+        // Aggregation functions
+        case 'count':
+          return dialect === 'pyspark' 
+            ? `F.count(${renderedArgs[0] || '*'})`
+            : `COUNT(${renderedArgs[0] || '*'})`;
+            
+        case 'count_distinct':
+          return dialect === 'pyspark'
+            ? `F.countDistinct(${renderedArgs.join(', ')})`
+            : `COUNT(DISTINCT ${renderedArgs.join(', ')})`;
+            
+        case 'sum':
+          return dialect === 'pyspark'
+            ? `F.sum(${renderedArgs[0]})`
+            : `SUM(${renderedArgs[0]})`;
+            
+        case 'avg':
+          return dialect === 'pyspark'
+            ? `F.avg(${renderedArgs[0]})`
+            : `AVG(${renderedArgs[0]})`;
+            
+        case 'min':
+          return dialect === 'pyspark'
+            ? `F.min(${renderedArgs[0]})`
+            : `MIN(${renderedArgs[0]})`;
+            
+        case 'max':
+          return dialect === 'pyspark'
+            ? `F.max(${renderedArgs[0]})`
+            : `MAX(${renderedArgs[0]})`;
+        
+        // Arithmetic
+        case 'divide':
+          return dialect === 'pyspark'
+            ? `(${renderedArgs[0]} / ${renderedArgs[1]})`
+            : `(${renderedArgs[0]} / ${renderedArgs[1]})`;
+            
+        case 'multiply':
+          return dialect === 'pyspark'
+            ? `(${renderedArgs[0]} * ${renderedArgs[1]})`
+            : `(${renderedArgs[0]} * ${renderedArgs[1]})`;
+            
+        case 'add':
+          return `(${renderedArgs[0]} + ${renderedArgs[1]})`;
+          
+        case 'subtract':
+          return `(${renderedArgs[0]} - ${renderedArgs[1]})`;
+        
+        // Time functions - CRITICAL for multi-dialect
+        case 'timestamp_diff_seconds':
+          if (dialect === 'presto') {
+            return `date_diff('second', ${renderedArgs[0]}, ${renderedArgs[1]})`;
+          } else if (dialect === 'spark_sql') {
+            return `(unix_timestamp(${renderedArgs[1]}) - unix_timestamp(${renderedArgs[0]}))`;
+          } else { // pyspark
+            return `(F.unix_timestamp(${renderedArgs[1]}) - F.unix_timestamp(${renderedArgs[0]}))`;
+          }
+          
+        case 'date_trunc':
+          const unit = renderedArgs[0].replace(/'/g, '');
+          if (dialect === 'pyspark') {
+            return `F.date_trunc('${unit}', ${renderedArgs[1]})`;
+          }
+          return `DATE_TRUNC('${unit}', ${renderedArgs[1]})`;
+        
+        // Conditional
+        case 'case':
+          if (dialect === 'pyspark') {
+            // F.when(cond, then).otherwise(else)
+            const whenClauses = ir.when || [];
+            const thenClauses = ir.then ? [ir.then] : [];
+            const elseClause = ir.else !== undefined ? renderExpressionForDialect(ir.else, dialect) : 'F.lit(None)';
+            
+            if (whenClauses.length > 0) {
+              const conditions = whenClauses.map((w, i) => {
+                const cond = renderExpressionForDialect(w, dialect);
+                const then = thenClauses[i] ? renderExpressionForDialect(thenClauses[i], dialect) : renderedArgs[0];
+                return `F.when(${cond}, ${then})`;
+              });
+              return `${conditions.join('.')}.otherwise(${elseClause})`;
+            }
+            return elseClause;
+          } else {
+            // SQL CASE WHEN
+            const whenClauses = ir.when || [];
+            let sql = 'CASE';
+            whenClauses.forEach((w, i) => {
+              const cond = renderExpressionForDialect(w, dialect);
+              const then = ir.then ? renderExpressionForDialect(ir.then, dialect) : renderedArgs[0];
+              sql += ` WHEN ${cond} THEN ${then}`;
+            });
+            if (ir.else !== undefined) {
+              sql += ` ELSE ${renderExpressionForDialect(ir.else, dialect)}`;
+            }
+            sql += ' END';
+            return sql;
+          }
+          
+        case 'is_not_null':
+          return dialect === 'pyspark'
+            ? `${renderedArgs[0]}.isNotNull()`
+            : `${renderedArgs[0]} IS NOT NULL`;
+            
+        case 'is_null':
+          return dialect === 'pyspark'
+            ? `${renderedArgs[0]}.isNull()`
+            : `${renderedArgs[0]} IS NULL`;
+        
+        // Null handling
+        case 'coalesce':
+          return dialect === 'pyspark'
+            ? `F.coalesce(${renderedArgs.join(', ')})`
+            : `COALESCE(${renderedArgs.join(', ')})`;
+            
+        case 'nullif':
+          return dialect === 'pyspark'
+            ? `F.when(${renderedArgs[0]} == ${renderedArgs[1]}, F.lit(None)).otherwise(${renderedArgs[0]})`
+            : `NULLIF(${renderedArgs[0]}, ${renderedArgs[1]})`;
+        
+        // Type casting
+        case 'cast':
+          const castType = renderedArgs[1] || 'VARCHAR';
+          if (dialect === 'pyspark') {
+            const pyType = castType.replace('DECIMAL', 'DecimalType').replace('VARCHAR', 'StringType()').replace('BIGINT', 'LongType()');
+            return `${renderedArgs[0]}.cast('${pyType}')`;
+          }
+          // Use portable CAST syntax (not ::)
+          return `CAST(${renderedArgs[0]} AS ${castType})`;
+        
+        default:
+          // Unknown op - return as function call
+          return dialect === 'pyspark'
+            ? `F.${op}(${renderedArgs.join(', ')})`
+            : `${op.toUpperCase()}(${renderedArgs.join(', ')})`;
+      }
+    }
+    
+    /**
+     * Normalize an expression SQL by replacing CTE aliases with base table references
+     * @param {string} expr - The original expression
+     * @param {Object} aliasMap - Map of alias -> base table (e.g., {bu: 'core.users', k: 'risk.kyc_events'})
+     * @returns {string} - Normalized expression
+     */
+    function normalizeExpressionToBaseTables(expr, aliasMap = {}) {
+      if (!expr) return expr;
+      
+      let normalized = expr;
+      
+      // Replace each alias with its base table
+      Object.entries(aliasMap).forEach(([alias, baseTable]) => {
+        // Match alias. patterns (e.g., bu.user_id -> core.users.user_id)
+        const regex = new RegExp(`\\b${alias}\\.`, 'gi');
+        normalized = normalized.replace(regex, `${baseTable}.`);
+      });
+      
+      return normalized;
+    }
+    
+    /**
+     * Infer nullability from expression SQL
+     */
+    function inferNullabilityFromExpression(expression_sql, aggregation_type, semantic_role) {
+      if (!expression_sql) return null; // Unknown
+      
+      const expr = expression_sql.toUpperCase();
+      
+      // COUNT expressions are never null
+      if (expr.startsWith('COUNT(') || aggregation_type === 'count' || aggregation_type === 'count_distinct') {
+        return false;
+      }
+      
+      // SUM with COALESCE is not null
+      if (expr.includes('COALESCE') && (expr.startsWith('SUM(') || aggregation_type === 'sum')) {
+        return false;
+      }
+      
+      // Ratios with NULLIF can be null (division by zero becomes null)
+      if (expr.includes('NULLIF') && (expr.includes('/') || aggregation_type === 'ratio')) {
+        return true;
+      }
+      
+      // AVG can be null if no rows
+      if (expr.startsWith('AVG(') || aggregation_type === 'avg') {
+        return true;
+      }
+      
+      // Dimensions: Don't assume false without proof - return null (unknown)
+      if (semantic_role === 'dimension') {
+        return null; // Unknown - need to check source column nullability
+      }
+      
+      return null; // Unknown - let post-processing decide
     }
 
     // ==================== TOAST NOTIFICATIONS ====================
@@ -6182,7 +6563,13 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       const tableGroups = graph.selectAll('.erd-table-node')
         .data(ERDState.tables, d => d.id)
         .join('g')
-        .attr('class', d => `erd-table-node ${ERDState.selectedTable === d.id ? 'selected' : ''}`)
+        .attr('class', d => {
+          let classes = 'erd-table-node';
+          if (ERDState.selectedTable === d.id) classes += ' selected';
+          if (d.is_stub) classes += ' stub';
+          if (d.is_aggregated) classes += ' aggregated';
+          return classes;
+        })
         .attr('transform', d => `translate(${d.x || 0}, ${d.y || 0})`)
         .call(d3.drag()
           .on('start', dragStarted)
@@ -6238,13 +6625,35 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         }
 
         // Table name
-        g.append('text')
+        const tableName = g.append('text')
+          .attr('class', 'erd-table-title')
           .attr('x', typeInfo ? 18 : 12)
           .attr('y', 21)
           .attr('fill', headerTextColor)
           .attr('font-size', '13px')
           .attr('font-weight', '600')
           .text(table.name);
+        
+        // Add stub indicator if is_stub
+        if (table.is_stub) {
+          g.append('text')
+            .attr('x', width - 65)
+            .attr('y', 21)
+            .attr('fill', '#9ca3af')
+            .attr('font-size', '9px')
+            .attr('font-style', 'italic')
+            .text('(source)');
+        }
+        
+        // Add aggregated indicator with grain icon
+        if (table.is_aggregated && table.grain_columns?.length > 0) {
+          g.append('text')
+            .attr('x', width - 65)
+            .attr('y', 21)
+            .attr('fill', '#f59e0b')
+            .attr('font-size', '9px')
+            .text('⚡ agg');
+        }
 
         // Table actions
         const actionsG = g.append('g')
@@ -6360,34 +6769,70 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         
         if (!sourceTable || !targetTable) return;
 
-        const sourceColIndex = sourceTable.columns.findIndex(c => c.name === rel.from.column);
-        const targetColIndex = targetTable.columns.findIndex(c => c.name === rel.to.column);
+        let sourceX, sourceY, targetX, targetY;
+        
+        // Handle lineage relationships (table-to-table, no columns)
+        if (rel.type === 'lineage') {
+          // Connect from center-right of source to center-left of target
+          const sourceTableHeight = 32 + (sourceTable.columns?.length || 1) * 24;
+          const targetTableHeight = 32 + (targetTable.columns?.length || 1) * 24;
+          
+          sourceX = (sourceTable.x || 0) + 200;
+          sourceY = (sourceTable.y || 0) + sourceTableHeight / 2;
+          targetX = targetTable.x || 0;
+          targetY = (targetTable.y || 0) + targetTableHeight / 2;
+        } else {
+          // FK or join_condition relationships require columns
+          const sourceColIndex = sourceTable.columns?.findIndex(c => c.name === rel.from.column);
+          const targetColIndex = targetTable.columns?.findIndex(c => c.name === rel.to.column);
 
-        if (sourceColIndex === -1 || targetColIndex === -1) return;
+          if (sourceColIndex === -1 || sourceColIndex === undefined || 
+              targetColIndex === -1 || targetColIndex === undefined) return;
 
-        const sourceX = (sourceTable.x || 0) + 200;
-        const sourceY = (sourceTable.y || 0) + 32 + sourceColIndex * 24 + 16;
-        const targetX = targetTable.x || 0;
-        const targetY = (targetTable.y || 0) + 32 + targetColIndex * 24 + 16;
+          sourceX = (sourceTable.x || 0) + 200;
+          sourceY = (sourceTable.y || 0) + 32 + sourceColIndex * 24 + 16;
+          targetX = targetTable.x || 0;
+          targetY = (targetTable.y || 0) + 32 + targetColIndex * 24 + 16;
+        }
 
         // Draw curved line
         const midX = (sourceX + targetX) / 2;
         const path = `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`;
 
+        // Determine CSS class based on relationship type
+        let lineClass = 'erd-relationship-line';
+        if (rel.type === 'lineage') {
+          lineClass += ' lineage';
+        } else if (rel.type === 'join_condition' || rel.type === 'join') {
+          lineClass += ' join';
+        }
+        if (ERDState.selectedRelationship === rel.id) {
+          lineClass += ' selected';
+        }
+
+        // Determine marker based on type
+        let marker = 'url(#arrow-many)';
+        if (rel.type === 'one-to-one') marker = 'url(#arrow-one)';
+        if (rel.type === 'lineage') marker = 'url(#arrow-many)'; // Lineage uses flow arrow
+        if (rel.type === 'join') marker = 'url(#arrow-many)'; // Join uses connection arrow
+
         graph.append('path')
-          .attr('class', `erd-relationship-line ${ERDState.selectedRelationship === rel.id ? 'selected' : ''}`)
+          .attr('class', lineClass)
           .attr('d', path)
-          .attr('marker-end', rel.type === 'one-to-one' ? 'url(#arrow-one)' : 'url(#arrow-many)')
+          .attr('marker-end', marker)
           .on('click', () => selectRelationship(rel.id));
 
         // Relationship label
-        if (rel.label) {
+        const labelText = rel.label || (rel.type === 'lineage' ? 'depends on' : 
+                                        (rel.type === 'join_condition' || rel.type === 'join') ? 
+                                        (rel.join_type || 'joins') : '');
+        if (labelText) {
           graph.append('text')
             .attr('class', 'erd-relationship-label')
             .attr('x', midX)
             .attr('y', (sourceY + targetY) / 2 - 5)
             .attr('text-anchor', 'middle')
-            .text(rel.label);
+            .text(labelText);
         }
       });
     }
@@ -7004,9 +7449,10 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         // Relationships sheet
         if (ERDState.relationships.length > 0) {
           const relData = ERDState.relationships.map(r => ({
-            from: `${r.from.table}.${r.from.column}`,
-            to: `${r.to.table}.${r.to.column}`,
-            type: r.type
+            from: r.from.column ? `${r.from.table}.${r.from.column}` : r.from.table,
+            to: r.to.column ? `${r.to.table}.${r.to.column}` : r.to.table,
+            type: r.type,
+            join_keys: r.join_keys ? r.join_keys.join(', ') : ''
           }));
           const ws = XLSX.utils.json_to_sheet(relData);
           XLSX.utils.book_append_sheet(wb, ws, 'Relationships');
@@ -7361,6 +7807,67 @@ If action is unknown, set message to explain what went wrong.`,
       document.getElementById('side-panel-table-name').value = table.name;
       document.getElementById('side-panel-table-type').value = table.tableType || '';
       document.getElementById('side-panel-table-desc').value = table.description || '';
+      
+      // Show/hide badges
+      const badgesContainer = document.getElementById('side-panel-table-badges');
+      const stubBadge = document.getElementById('side-panel-stub-badge');
+      const aggBadge = document.getElementById('side-panel-agg-badge');
+      
+      const showBadges = table.is_stub || table.is_aggregated;
+      badgesContainer.classList.toggle('view-hidden', !showBadges);
+      stubBadge.classList.toggle('view-hidden', !table.is_stub);
+      aggBadge.classList.toggle('view-hidden', !table.is_aggregated);
+      
+      // Show grain columns section for aggregated tables
+      const grainSection = document.getElementById('side-panel-grain-section');
+      const grainContainer = document.getElementById('side-panel-grain-columns');
+      
+      if (table.is_aggregated && table.grain_columns?.length > 0) {
+        grainSection.classList.remove('view-hidden');
+        grainContainer.innerHTML = table.grain_columns.map(col => 
+          `<span class="px-2 py-0.5 bg-amber-900/30 text-amber-400 text-xs rounded font-mono">${col}</span>`
+        ).join('');
+      } else {
+        grainSection.classList.add('view-hidden');
+        grainContainer.innerHTML = '';
+      }
+      
+      // Show filters section if present (prefer normalized, show both if available)
+      const filtersSection = document.getElementById('side-panel-filters-section');
+      const filtersContainer = document.getElementById('side-panel-filters');
+      
+      const hasOriginalFilters = table.filters_original?.length > 0 || table.filters?.length > 0;
+      const hasNormalizedFilters = table.filters_normalized?.length > 0;
+      
+      if (hasOriginalFilters || hasNormalizedFilters) {
+        filtersSection.classList.remove('view-hidden');
+        
+        let filtersHtml = '';
+        
+        // Show normalized filters first (preferred)
+        if (hasNormalizedFilters) {
+          filtersHtml += '<div class="text-xs text-gray-500 mb-1">Normalized (base tables):</div>';
+          filtersHtml += table.filters_normalized.map(f => 
+            `<div class="text-green-400 py-1 border-b border-surface-lighter last:border-0">${escapeHtml(f)}</div>`
+          ).join('');
+        }
+        
+        // Show original filters (with aliases)
+        const originalFilters = table.filters_original || table.filters || [];
+        if (originalFilters.length > 0) {
+          if (hasNormalizedFilters) {
+            filtersHtml += '<div class="text-xs text-gray-500 mb-1 mt-2">Original (with aliases):</div>';
+          }
+          filtersHtml += originalFilters.map(f => 
+            `<div class="text-cyan-400/70 py-1 border-b border-surface-lighter last:border-0">${escapeHtml(f)}</div>`
+          ).join('');
+        }
+        
+        filtersContainer.innerHTML = filtersHtml;
+      } else {
+        filtersSection.classList.add('view-hidden');
+        filtersContainer.innerHTML = '';
+      }
 
       // Render columns
       renderSidePanelColumns(table);
@@ -7379,15 +7886,74 @@ If action is unknown, set message to explain what went wrong.`,
       document.getElementById('side-panel-table-editor').classList.add('view-hidden');
       document.getElementById('side-panel-rel-editor').classList.remove('view-hidden');
 
-      // Update header
+      // Update header with relationship role
       document.getElementById('side-panel-icon').textContent = 'link';
-      document.getElementById('side-panel-title').textContent = 'Relationship';
+      const titleMap = { 'lineage': 'Lineage', 'join': 'Join', 'join_condition': 'Join Condition' };
+      const roleMap = { 'data_dependency': '(Data Flow)', 'join_path': '(Join Path)' };
+      const roleLabel = rel.relationship_role ? ` ${roleMap[rel.relationship_role] || ''}` : '';
+      document.getElementById('side-panel-title').textContent = (titleMap[rel.type] || 'Relationship') + roleLabel;
 
-      // Fill form
-      document.getElementById('side-panel-rel-from').textContent = `${rel.from.table}.${rel.from.column}`;
-      document.getElementById('side-panel-rel-to').textContent = `${rel.to.table}.${rel.to.column}`;
+      // Fill form - handle lineage relationships without columns
+      const fromDisplay = rel.from.column ? `${rel.from.table}.${rel.from.column}` : rel.from.table;
+      const toDisplay = rel.to.column ? `${rel.to.table}.${rel.to.column}` : rel.to.table;
+      document.getElementById('side-panel-rel-from').textContent = fromDisplay;
+      document.getElementById('side-panel-rel-to').textContent = toDisplay;
       document.getElementById('side-panel-rel-type').value = rel.type || 'many-to-one';
-      document.getElementById('side-panel-rel-label').value = rel.label || '';
+      
+      // Build label with cardinality info for joins
+      let labelText = rel.label || '';
+      if (rel.type === 'join') {
+        // Show cardinality with confidence
+        const cardinalityDisplay = rel.cardinality || 'unknown';
+        const confidencePercent = rel.cardinality_confidence !== undefined 
+          ? Math.round(rel.cardinality_confidence * 100) : 0;
+        const basisLabel = rel.cardinality_basis === 'catalog' ? '📋' : 
+                          rel.cardinality_basis === 'heuristic' ? '🔮' : '❓';
+        labelText = `${rel.join_type || 'JOIN'} | ${cardinalityDisplay} ${basisLabel}${confidencePercent}%`;
+        
+        // Add on_sql if present
+        if (rel.on_sql_normalized || rel.on_sql) {
+          labelText += ` | ${rel.on_sql_normalized || rel.on_sql}`;
+        }
+      } else if (rel.join_keys && Array.isArray(rel.join_keys)) {
+        labelText = rel.label || `Join on: ${rel.join_keys.join(', ')}`;
+      }
+      document.getElementById('side-panel-rel-label').value = labelText;
+      
+      // Show join_conditions section for lineage relationships
+      const joinConditionsSection = document.getElementById('side-panel-join-conditions');
+      const joinList = document.getElementById('side-panel-join-list');
+      
+      if (rel.join_conditions && Array.isArray(rel.join_conditions) && rel.join_conditions.length > 0) {
+        joinConditionsSection.classList.remove('view-hidden');
+        joinList.innerHTML = rel.join_conditions.map(jc => {
+          const joinTypeColors = {
+            'INNER': 'text-blue-400',
+            'LEFT': 'text-green-400',
+            'DERIVED': 'text-amber-400',
+            'SEMI': 'text-purple-400'
+          };
+          const colorClass = joinTypeColors[jc.join_type] || 'text-gray-400';
+          
+          return `
+            <div class="bg-surface-light rounded-lg p-2 text-xs">
+              <div class="flex items-center gap-1 mb-1">
+                <span class="${colorClass} font-medium">${jc.join_type || 'JOIN'}</span>
+              </div>
+              <div class="font-mono text-gray-300 break-all">
+                ${escapeHtml(jc.left_expression || '')}
+              </div>
+              <div class="text-gray-500 my-1">=</div>
+              <div class="font-mono text-gray-300 break-all">
+                ${escapeHtml(jc.right_expression || '')}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        joinConditionsSection.classList.add('view-hidden');
+        joinList.innerHTML = '';
+      }
     }
 
     function closeSidePanel() {
@@ -7405,24 +7971,95 @@ If action is unknown, set message to explain what went wrong.`,
         return;
       }
 
-      container.innerHTML = table.columns.map((col, i) => `
-        <div class="bg-surface-light rounded-lg p-2 flex items-center gap-2">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-1">
-              ${col.primaryKey ? '<span class="text-warning text-xs">🔑</span>' : ''}
-              ${col.foreignKey ? '<span class="text-primary text-xs">🔗</span>' : ''}
-              <span class="font-mono text-sm truncate">${col.name}</span>
+      container.innerHTML = table.columns.map((col, i) => {
+        // Build type display with confidence indicator
+        let typeDisplay = col.type || 'UNKNOWN';
+        let confidenceIndicator = '';
+        
+        if (col.type_confidence !== undefined && col.type_confidence < 0.8) {
+          const confidencePercent = Math.round(col.type_confidence * 100);
+          confidenceIndicator = `<span class="text-amber-400 text-xs ml-1" title="Type confidence: ${confidencePercent}%">~${confidencePercent}%</span>`;
+        }
+        
+        // Show inferred_from if present
+        let inferredInfo = '';
+        if (col.inferred_from) {
+          inferredInfo = `<div class="text-xs text-gray-600 truncate" title="${escapeHtml(col.inferred_from)}">↳ ${escapeHtml(col.inferred_from.substring(0, 30))}${col.inferred_from.length > 30 ? '...' : ''}</div>`;
+        }
+        
+        // Grain badge - use is_grain flag or check grain_columns array
+        const isGrainColumn = col.is_grain || table.grain_columns?.includes(col.name);
+        const grainBadge = isGrainColumn ? '<span class="px-1 py-0.5 bg-amber-900/30 text-amber-400 text-xs rounded ml-1" title="Grain column (composite key)">G</span>' : '';
+        
+        // Semantic role badge (dimension/measure)
+        let roleBadge = '';
+        if (col.semantic_role === 'measure') {
+          roleBadge = '<span class="px-1 py-0.5 bg-purple-900/30 text-purple-400 text-xs rounded ml-1" title="Measure (aggregated value)">M</span>';
+        } else if (col.semantic_role === 'dimension') {
+          roleBadge = '<span class="px-1 py-0.5 bg-blue-900/30 text-blue-400 text-xs rounded ml-1" title="Dimension (grouping)">D</span>';
+        }
+        
+        // Expression display - prefer normalized, fallback to original
+        const exprDisplay = col.expression_sql_normalized || col.expression_sql_original || col.expression_sql;
+        let expressionInfo = '';
+        if (exprDisplay) {
+          expressionInfo = `<div class="text-xs text-cyan-400/70 font-mono truncate" title="${escapeHtml(exprDisplay)}">= ${escapeHtml(exprDisplay.substring(0, 35))}${exprDisplay.length > 35 ? '...' : ''}</div>`;
+        }
+        
+        // Show renderings if available
+        let renderingsInfo = '';
+        if (col.renderings) {
+          const dialect = (localStorage.getItem('sql_copilot_dialect') || 'presto').toLowerCase();
+          const dialectKey = dialect === 'spark' ? 'spark_sql' : dialect;
+          const rendering = col.renderings[dialectKey];
+          if (rendering) {
+            renderingsInfo = `<div class="text-xs text-green-400/70 font-mono truncate" title="${escapeHtml(rendering)}">[${dialect}] ${escapeHtml(rendering.substring(0, 30))}${rendering.length > 30 ? '...' : ''}</div>`;
+          }
+        }
+        
+        // Inferred from query badge
+        const inferredBadge = col.inferred_from_query ? '<span class="text-gray-600 text-xs ml-1" title="Inferred from query usage">◐</span>' : '';
+        
+        // Nullability indicator
+        let nullBadge = '';
+        if (col.nullable === false) {
+          nullBadge = '<span class="text-green-500 text-xs ml-1" title="NOT NULL">!</span>';
+        } else if (col.nullable === null) {
+          nullBadge = '<span class="text-gray-500 text-xs ml-1" title="Nullability unknown">?</span>';
+        }
+        
+        // Only show actual PK for single-column PKs (not grain columns)
+        const showPK = (col.isPK || col.primaryKey) && !isGrainColumn;
+        
+        return `
+          <div class="bg-surface-light rounded-lg p-2">
+            <div class="flex items-center gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1 flex-wrap">
+                  ${showPK ? '<span class="text-warning text-xs">🔑</span>' : ''}
+                  ${col.isFK || col.foreignKey ? '<span class="text-primary text-xs">🔗</span>' : ''}
+                  <span class="font-mono text-sm truncate">${col.name}</span>
+                  ${grainBadge}${roleBadge}${inferredBadge}${nullBadge}
+                </div>
+                <div class="flex items-center">
+                  <span class="text-xs text-gray-500">${typeDisplay}</span>
+                  ${confidenceIndicator}
+                  ${col.aggregation_type ? `<span class="text-xs text-purple-400 ml-2">(${col.aggregation_type})</span>` : ''}
+                </div>
+                ${expressionInfo}
+                ${renderingsInfo}
+                ${inferredInfo}
+              </div>
+              <button onclick="editColumnInSidePanel(${i})" class="p-1 hover:bg-surface-lighter rounded transition-colors">
+                <span class="material-symbols-outlined text-xs">edit</span>
+              </button>
+              <button onclick="deleteColumnInSidePanel(${i})" class="p-1 hover:bg-error/20 rounded transition-colors">
+                <span class="material-symbols-outlined text-xs text-error">delete</span>
+              </button>
             </div>
-            <span class="text-xs text-gray-500">${col.type}</span>
           </div>
-          <button onclick="editColumnInSidePanel(${i})" class="p-1 hover:bg-surface-lighter rounded transition-colors">
-            <span class="material-symbols-outlined text-xs">edit</span>
-          </button>
-          <button onclick="deleteColumnInSidePanel(${i})" class="p-1 hover:bg-error/20 rounded transition-colors">
-            <span class="material-symbols-outlined text-xs text-error">delete</span>
-          </button>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     function addColumnFromSidePanel() {
@@ -7567,10 +8204,26 @@ If action is unknown, set message to explain what went wrong.`,
       });
 
       if (ERDState.relationships.length > 0) {
-        context += 'RELATIONSHIPS:\n';
-        ERDState.relationships.forEach(r => {
-          context += `  - ${r.from.table}.${r.from.column} → ${r.to.table}.${r.to.column} (${r.type})\n`;
-        });
+        // Separate FK relationships from lineage
+        const fkRels = ERDState.relationships.filter(r => r.type !== 'lineage');
+        const lineageRels = ERDState.relationships.filter(r => r.type === 'lineage');
+        
+        if (fkRels.length > 0) {
+          context += 'RELATIONSHIPS (FK/Joins):\n';
+          fkRels.forEach(r => {
+            const fromStr = r.from.column ? `${r.from.table}.${r.from.column}` : r.from.table;
+            const toStr = r.to.column ? `${r.to.table}.${r.to.column}` : r.to.table;
+            const typeLabel = r.type === 'join_condition' ? 'join' : r.type;
+            context += `  - ${fromStr} → ${toStr} (${typeLabel})\n`;
+          });
+        }
+        
+        if (lineageRels.length > 0) {
+          context += '\nDATA LINEAGE (depends on):\n';
+          lineageRels.forEach(r => {
+            context += `  - ${r.from.table} depends on ${r.to.table}\n`;
+          });
+        }
       }
 
       return context;
@@ -8445,8 +9098,8 @@ Infer column types from context. Identify JOINs as relationships.`;
 
     async function analyzeMultipleSQLForSchema(sqlFiles) {
       // If there are many files, process in batches to avoid API limits
-      const MAX_FILES_PER_BATCH = 5;
-      const MAX_CONTENT_LENGTH = 15000; // Limit content size per batch
+      const MAX_FILES_PER_BATCH = 2;  // Reduced from 5 to avoid token overflow
+      const MAX_CONTENT_LENGTH = 10000; // Limit content size per batch
       
       if (sqlFiles.length > MAX_FILES_PER_BATCH) {
         // Process in batches and merge results
@@ -8486,46 +9139,498 @@ Infer column types from context. Identify JOINs as relationships.`;
       return analyzeSchemaForBatch(sqlFiles);
     }
     
+    // Validate and clean schema analysis results
+    function validateSchemaResult(result) {
+      if (!result || !result.tables) return result;
+      
+      // Ensure tables array exists
+      if (!Array.isArray(result.tables)) result.tables = [];
+      if (!Array.isArray(result.relationships)) result.relationships = [];
+      
+      // 0. FIRST: Filter out CTE aliases (not real tables)
+      // CTE aliases have no dots and are typically short (1-3 chars like k, bu, ac, ff, ft)
+      const originalCount = result.tables.length;
+      result.tables = result.tables.filter(table => {
+        const name = table.name || '';
+        // Real tables have schema.table format (contain a dot)
+        if (name.includes('.')) return true;
+        // If no dot and short name (<=3 chars), likely a CTE alias - remove it
+        if (name.length <= 3) {
+          console.warn(`Filtering out CTE alias: ${name}`);
+          return false;
+        }
+        // Longer names without dots might be valid unqualified tables - keep with warning
+        console.warn(`Keeping unqualified table name: ${name} (might be CTE)`);
+        return true;
+      });
+      if (result.tables.length < originalCount) {
+        console.log(`Filtered ${originalCount - result.tables.length} CTE aliases from schema`);
+      }
+      
+      // Also filter relationships that reference CTE aliases
+      const validTableNames = new Set(result.tables.map(t => t.name.toLowerCase()));
+      result.relationships = result.relationships.filter(rel => {
+        const fromTable = rel.from?.table?.toLowerCase() || '';
+        const toTable = rel.to?.table?.toLowerCase() || '';
+        // For lineage/join, check if tables are valid (have dots or are in our valid set)
+        const fromValid = fromTable.includes('.') || validTableNames.has(fromTable);
+        const toValid = toTable.includes('.') || validTableNames.has(toTable);
+        if (!fromValid || !toValid) {
+          console.warn(`Filtering relationship with CTE reference: ${fromTable} -> ${toTable}`);
+          return false;
+        }
+        return true;
+      });
+      
+      // 1. Ensure Node Closure - create stub tables for all referenced tables
+      result = ensureNodeClosure(result);
+      
+      // 2. Build column lookup map: "table.column" -> true
+      const columnMap = new Map();
+      const tableMap = new Map(); // table name -> table object
+      
+      result.tables.forEach(table => {
+        const tableName = table.name.toLowerCase();
+        tableMap.set(tableName, table);
+        
+        if (table.columns && Array.isArray(table.columns)) {
+          table.columns.forEach(col => {
+            const key = `${tableName}.${col.name.toLowerCase()}`;
+            columnMap.set(key, true);
+          });
+        }
+      });
+      
+      // 3. Enforce PK nullable constraint - PKs can never be nullable
+      result.tables.forEach(table => {
+        if (table.columns && Array.isArray(table.columns)) {
+          table.columns.forEach(col => {
+            if (col.isPK === true) {
+              col.nullable = false;
+            }
+          });
+        }
+      });
+      
+      // 4. Validate relationships - lineage always valid (tables guaranteed by node closure)
+      // For FK relationships, validate columns exist
+      result.relationships = result.relationships.filter(rel => {
+        // Lineage relationships don't require column validation - tables guaranteed to exist
+        if (rel.type === 'lineage') {
+          return true;
+        }
+        
+        // For FK and join_condition relationships with columns, validate columns exist
+        if (rel.from?.column && rel.to?.column) {
+          const fromKey = `${rel.from.table.toLowerCase()}.${rel.from.column.toLowerCase()}`;
+          const toKey = `${rel.to.table.toLowerCase()}.${rel.to.column.toLowerCase()}`;
+          
+          // Both columns must exist (but we're lenient - allow if at least tables exist)
+          const fromTableExists = tableMap.has(rel.from.table.toLowerCase());
+          const toTableExists = tableMap.has(rel.to.table.toLowerCase());
+          
+          if (!fromTableExists || !toTableExists) {
+            console.warn(`Removing invalid relationship: tables not found`);
+            return false;
+          }
+        }
+        
+        return true;
+      });
+      
+      // 5. Deduplicate mirrored relationships
+      const seenRelationships = new Set();
+      result.relationships = result.relationships.filter(rel => {
+        if (rel.type === 'lineage') {
+          // For lineage, create a unique key (table-to-table only)
+          const key = `lineage:${rel.from?.table?.toLowerCase()}:${rel.to?.table?.toLowerCase()}`;
+          if (seenRelationships.has(key)) return false;
+          seenRelationships.add(key);
+          return true;
+        }
+        
+        if (rel.type === 'join') {
+          // For join relationships, dedupe by table.column pairs (check both directions)
+          const fromTable = rel.from?.table?.toLowerCase() || '';
+          const fromCol = rel.from?.column?.toLowerCase() || '';
+          const toTable = rel.to?.table?.toLowerCase() || '';
+          const toCol = rel.to?.column?.toLowerCase() || '';
+          
+          const forwardKey = `join:${fromTable}.${fromCol}:${toTable}.${toCol}`;
+          const reverseKey = `join:${toTable}.${toCol}:${fromTable}.${fromCol}`;
+          
+          if (seenRelationships.has(forwardKey) || seenRelationships.has(reverseKey)) {
+            return false;
+          }
+          seenRelationships.add(forwardKey);
+          return true;
+        }
+        
+        // For FK/other relationships, check both directions
+        const fromTable = rel.from?.table?.toLowerCase() || '';
+        const fromCol = rel.from?.column?.toLowerCase() || '';
+        const toTable = rel.to?.table?.toLowerCase() || '';
+        const toCol = rel.to?.column?.toLowerCase() || '';
+        
+        const forwardKey = `${rel.type}:${fromTable}.${fromCol}:${toTable}.${toCol}`;
+        const reverseKey = `${rel.type}:${toTable}.${toCol}:${fromTable}.${fromCol}`;
+        
+        // If we've seen either direction, skip this one
+        if (seenRelationships.has(forwardKey) || seenRelationships.has(reverseKey)) {
+          console.warn(`Removing duplicate relationship: ${forwardKey}`);
+          return false;
+        }
+        
+        seenRelationships.add(forwardKey);
+        return true;
+      });
+      
+      // 6. Apply dialect-aware type normalization and smart nullability
+      const dialect = (localStorage.getItem('sql_copilot_dialect') || 'presto').toLowerCase();
+      
+      result.tables.forEach(table => {
+        // 6a. Fix composite key modeling - grain columns should use is_grain, not isPK
+        if (table.grain_columns && table.grain_columns.length > 1) {
+          // This is a composite key, not individual PKs
+          table.primary_key = [...table.grain_columns];
+          
+          if (table.columns && Array.isArray(table.columns)) {
+            table.columns.forEach(col => {
+              if (table.grain_columns.includes(col.name)) {
+                col.is_grain = true;
+                // Don't mark as single-column PK - it's part of composite key
+                if (!table.is_stub) {
+                  col.isPK = false;
+                }
+                // Add compatible_grains for measures
+              } else if (col.semantic_role === 'measure') {
+                // Measures should reference the grain they were computed at
+                col.compatible_grains = [...table.grain_columns];
+                col.requires_group_by = true;
+              }
+            });
+          }
+        }
+        
+        if (table.columns && Array.isArray(table.columns)) {
+          table.columns.forEach(col => {
+            // Normalize type for dialect
+            col.type = normalizeTypeForDialect(col.type, dialect, {
+              inferred_from: col.inferred_from
+            });
+            
+            // 6b. Apply smart nullability inference - don't assume false for dimensions
+            if (col.nullable === true || col.nullable === undefined) {
+              // Check if we can infer nullability from expression
+              const inferredNullable = inferNullabilityFromExpression(
+                col.expression_sql || col.expression_sql_original, 
+                col.aggregation_type,
+                col.semantic_role
+              );
+              
+              if (inferredNullable !== null) {
+                col.nullable = inferredNullable;
+              } else if (col.isPK === true) {
+                // Only actual single-column PKs are never nullable
+                col.nullable = false;
+              } else if (col.is_grain && !table.is_stub) {
+                // Grain columns in output tables: check if source is nullable
+                // For now, keep as null (unknown) unless proven otherwise
+                col.nullable = null;
+              }
+              // Dimensions: don't assume false without proof
+              if (col.nullable === undefined) {
+                col.nullable = null;
+              }
+            }
+            
+            // Ensure actual PKs (single-column, in source tables) are never nullable
+            if (col.isPK === true && table.is_stub) {
+              col.nullable = false;
+            }
+          });
+        }
+        
+        // Ensure grain_columns and unique_key are set for aggregated tables
+        if (table.is_aggregated && table.grain_columns && table.grain_columns.length > 0) {
+          if (!table.unique_key || table.unique_key.length === 0) {
+            table.unique_key = [...table.grain_columns];
+          }
+          if (!table.primary_key || table.primary_key.length === 0) {
+            table.primary_key = [...table.grain_columns];
+          }
+        }
+        
+        // Set schema_source if not already set
+        if (!table.schema_source) {
+          table.schema_source = table.is_stub ? 'query_inferred' : 'ctas_output';
+        }
+        
+        // Ensure filters arrays exist
+        if (!table.filters_original) table.filters_original = table.filters || [];
+        if (!table.filters_normalized) table.filters_normalized = [];
+      });
+      
+      // 6c. Fix cardinality - default to unknown for joins without proof
+      result.relationships.forEach(rel => {
+        if (rel.type === 'join') {
+          // Set relationship_role
+          rel.relationship_role = 'join_path';
+          
+          // Default cardinality to unknown unless explicitly proven
+          if (!rel.cardinality_basis || rel.cardinality_basis === 'heuristic') {
+            // 1_to_1 is almost never correct for event/transaction tables without proof
+            if (rel.cardinality === '1_to_1') {
+              rel.cardinality = 'unknown';
+              rel.cardinality_confidence = 0;
+              rel.cardinality_basis = 'unknown';
+            } else if (!rel.cardinality) {
+              rel.cardinality = 'unknown';
+              rel.cardinality_confidence = 0;
+              rel.cardinality_basis = 'unknown';
+            }
+          }
+          
+          // Ensure cardinality metadata exists
+          if (rel.cardinality_confidence === undefined) {
+            rel.cardinality_confidence = rel.cardinality === 'unknown' ? 0 : 0.5;
+          }
+          if (!rel.cardinality_basis) {
+            rel.cardinality_basis = 'heuristic';
+          }
+        } else if (rel.type === 'lineage') {
+          // Set relationship_role for lineage
+          rel.relationship_role = 'data_dependency';
+        }
+      });
+      
+      // 7. Generate deterministic IDs for tables, columns, and relationships
+      result.tables.forEach(table => {
+        // Generate stable table ID
+        const tableKey = table.name.toLowerCase();
+        table.id = `table_${stableHash(tableKey)}`;
+        
+        // Generate stable column IDs
+        if (table.columns && Array.isArray(table.columns)) {
+          table.columns.forEach(col => {
+            const colKey = `${tableKey}.${col.name.toLowerCase()}`;
+            col.id = `col_${stableHash(colKey)}`;
+          });
+        }
+      });
+      
+      result.relationships.forEach(rel => {
+        // Generate stable relationship ID
+        const relKey = `${rel.type || 'rel'}:${rel.from?.table || ''}:${rel.from?.column || ''}:${rel.to?.table || ''}:${rel.to?.column || ''}`;
+        rel.id = `rel_${stableHash(relKey)}`;
+      });
+      
+      return result;
+    }
+    
+    // Ensure every table referenced in relationships exists as a node
+    function ensureNodeClosure(result) {
+      const existingTables = new Set(result.tables.map(t => t.name.toLowerCase()));
+      const referencedTables = new Map(); // tableName -> { join keys referenced }
+      
+      // Collect all referenced tables from relationships
+      result.relationships.forEach(rel => {
+        if (rel.from?.table) {
+          const name = rel.from.table.toLowerCase();
+          if (!referencedTables.has(name)) referencedTables.set(name, new Set());
+          if (rel.from.column) referencedTables.get(name).add(rel.from.column);
+        }
+        if (rel.to?.table) {
+          const name = rel.to.table.toLowerCase();
+          if (!referencedTables.has(name)) referencedTables.set(name, new Set());
+          if (rel.to.column) referencedTables.get(name).add(rel.to.column);
+        }
+        
+        // Also check join_conditions for referenced tables/columns
+        if (rel.join_conditions && Array.isArray(rel.join_conditions)) {
+          rel.join_conditions.forEach(jc => {
+            // Parse table.column from expressions like "core.users.user_id"
+            const leftParts = (jc.left_expression || '').split('.');
+            const rightParts = (jc.right_expression || '').split('.');
+            
+            if (leftParts.length >= 2) {
+              const tableName = leftParts.slice(0, -1).join('.').toLowerCase();
+              if (!referencedTables.has(tableName)) referencedTables.set(tableName, new Set());
+              referencedTables.get(tableName).add(leftParts[leftParts.length - 1]);
+            }
+            if (rightParts.length >= 2) {
+              const tableName = rightParts.slice(0, -1).join('.').toLowerCase();
+              if (!referencedTables.has(tableName)) referencedTables.set(tableName, new Set());
+              referencedTables.get(tableName).add(rightParts[rightParts.length - 1]);
+            }
+          });
+        }
+      });
+      
+      // Create stub nodes for missing tables
+      referencedTables.forEach((columns, tableName) => {
+        if (!existingTables.has(tableName)) {
+          // Find original case from relationships
+          let originalName = tableName;
+          result.relationships.forEach(rel => {
+            if (rel.from?.table?.toLowerCase() === tableName) originalName = rel.from.table;
+            if (rel.to?.table?.toLowerCase() === tableName) originalName = rel.to.table;
+          });
+          
+          // Infer table type from name pattern
+          let tableType = 'raw';
+          if (originalName.includes('analytics.') || originalName.includes('kpi_')) tableType = 'gold';
+          else if (originalName.includes('silver.')) tableType = 'silver';
+          else if (originalName.includes('core.')) tableType = 'raw';
+          
+          // Create stub columns from referenced join keys
+          const stubColumns = Array.from(columns).filter(c => c && !c.includes('(')).map(colName => {
+            const colKey = `${originalName.toLowerCase()}.${colName.toLowerCase()}`;
+            return {
+              id: `col_${stableHash(colKey)}`,
+              name: colName,
+              type: colName.endsWith('_id') ? 'BIGINT' : 
+                    colName.endsWith('_at') || colName.endsWith('_ts') ? 'TIMESTAMP' :
+                    colName.endsWith('_dt') ? 'DATE' : 'VARCHAR',
+              description: 'Join key (inferred from query)',
+              inferred_from_query: true,
+              isPK: colName.endsWith('_id'),
+              isFK: false,
+              nullable: colName.endsWith('_id') ? false : null // Unknown for non-PK
+            };
+          });
+          
+          result.tables.push({
+            id: `table_${stableHash(originalName.toLowerCase())}`,
+            name: originalName,
+            description: 'Source table (inferred from relationships)',
+            tableType: tableType,
+            schema_source: 'query_inferred',
+            is_stub: true,
+            columns: stubColumns
+          });
+          
+          console.log(`Created stub table: ${originalName} with ${stubColumns.length} inferred columns`);
+        }
+      });
+      
+      return result;
+    }
+    
     async function analyzeSchemaForBatch(sqlFiles) {
-      // Truncate content if too long
+      // Increased content limit to avoid truncation of complex expressions
       const combinedSQL = sqlFiles.map(f => {
-        const content = f.content.length > 3000 
-          ? f.content.substring(0, 3000) + '\n-- [TRUNCATED]' 
+        const content = f.content.length > 8000 
+          ? f.content.substring(0, 8000) + '\n-- [TRUNCATED FOR LENGTH]' 
           : f.content;
         return `-- File: ${f.path}\n${content}`;
       }).join('\n\n');
       
-      const systemPrompt = `Analyze these SQL queries and extract schema information.
+      const systemPrompt = `SQL schema analyzer for multi-dialect SQL generation. Extract COMPLETE metadata with dialect-neutral IR. Output ONLY valid JSON.
 
-IMPORTANT: Generate helpful DESCRIPTIONS for each table and column based on:
-- The table/column name
-- How it's used in the queries (JOINs, calculations, filters)
-- Common naming conventions
-- Business context you can infer
+## CRITICAL RULES
 
-Return JSON:
+### CTE Handling
+- DO NOT create tables for CTE aliases (k, bu, ac, ff, ft from WITH clauses)
+- Only emit REAL tables: CTAS targets + source tables with schema.table format (must contain dot)
+
+### CTAS Output Tables
+For \`CREATE TABLE target AS WITH...SELECT...FROM...GROUP BY\`:
+- Columns ONLY from final SELECT projection
+- Set \`is_aggregated:true\`, \`grain_columns\`, \`unique_key\`, \`primary_key\` from GROUP BY
+
+### Expression Handling (CRITICAL - Multi-Dialect)
+For EACH computed column, provide DIALECT-NEUTRAL expressions:
+- \`expression_sql_original\`: Exact SQL as in query (for traceability)
+- \`expression_sql_normalized\`: Using fully qualified base table refs (schema.table.column), no CTE aliases
+- \`expression_ir\`: Dialect-neutral AST/JSON (see IR format below)
+- \`renderings\`: {presto, spark_sql, pyspark} - dialect-specific SQL
+
+### IR Format (expression_ir)
+Use these ops: avg, sum, count, count_distinct, case, divide, multiply, timestamp_diff_seconds, date_trunc, coalesce, nullif, is_not_null, cast
+Example: {"op":"avg","args":[{"op":"divide","args":[{"op":"timestamp_diff_seconds","args":["core.users.created_at","risk.kyc_events.decision_at"]},3600]}]}
+
+### Key Modeling (CRITICAL)
+- Composite keys: Do NOT mark each column as isPK. Use table-level \`primary_key\` array
+- Grain columns: Mark as \`is_grain:true\` (not isPK)
+- Only single-column actual PKs (like user_id in source tables) get \`isPK:true\`
+
+### Cardinality (CRITICAL - Default Unknown)
+- WITHOUT proof of uniqueness, set \`cardinality:"unknown"\`
+- Only use 1_to_1 if catalog/constraints prove it
+- Add \`cardinality_confidence\` (0-1) and \`cardinality_basis\`: "catalog"|"heuristic"|"unknown"
+
+### Filters (Normalized + Per-Source)
+At table level:
+- \`filters_original\`: Alias-based (e.g., "u.created_at >= DATE '2025-01-01'")
+- \`filters_normalized\`: Fully qualified (e.g., "core.users.created_at >= DATE '2025-01-01'")
+At lineage edge level:
+- \`source_filters\`: Filters specific to that source table
+
+### Nullability Rules
+- COUNT(*), COUNT(DISTINCT) → nullable:false
+- SUM(COALESCE(x,0)) → nullable:false
+- Ratios with NULLIF → nullable:true
+- Dimensions: Inherit from source if known, else nullable:null (unknown)
+- DO NOT assume nullable:false without proof
+
+### Column Metadata
+- \`semantic_role\`: "dimension" or "measure"
+- \`aggregation_type\`: "count_distinct", "sum", "avg", "ratio", "none"
+- \`source_columns\`: ALL base columns in derivation (transitive closure, including grouping keys)
+- \`via_steps\`: Optional CTE path for reconstruction
+- \`compatible_grains\`: For measures, list of grain columns
+- \`requires_group_by\`: true for aggregated measures
+
+### Stub Tables
+- Include ALL columns referenced with \`inferred_from_query:true\`
+- Set \`schema_source:"query_inferred"\`
+
+### Relationships
+a) Lineage (type:"lineage"): \`relationship_role:"data_dependency"\`, include \`source_filters\`
+b) Join (type:"join"): \`relationship_role:"join_path"\`, include join_type, on_sql, on_sql_normalized, cardinality, cardinality_basis, cardinality_confidence
+
+## OUTPUT FORMAT
 {
-  "tables": [{ 
-    "name": "table_name",
-    "description": "A brief description of what this table contains",
-    "columns": [{ 
-      "name": "col", 
-      "type": "TYPE (infer from usage)", 
-      "description": "What this column represents",
-      "isPK": false, 
-      "isFK": false 
-    }],
-    "tableType": "raw|silver|gold|diamond|black|prediction or null"
+  "tables":[{
+    "name":"schema.table",
+    "description":"Short desc",
+    "tableType":"raw|gold|silver",
+    "schema_source":"ctas_output|query_inferred",
+    "is_stub":false,
+    "is_aggregated":true,
+    "grain_columns":["dim1","dim2"],
+    "unique_key":["dim1","dim2"],
+    "primary_key":["dim1","dim2"],
+    "filters_original":["alias.col >= DATE '2025-01-01'"],
+    "filters_normalized":["schema.table.col >= DATE '2025-01-01'"],
+    "columns":[{
+      "name":"metric",
+      "type":"BIGINT",
+      "description":"desc",
+      "semantic_role":"measure",
+      "aggregation_type":"count_distinct",
+      "expression_sql_original":"COUNT(DISTINCT bu.user_id)",
+      "expression_sql_normalized":"COUNT(DISTINCT core.users.user_id)",
+      "expression_ir":{"op":"count_distinct","args":["core.users.user_id"]},
+      "renderings":{"presto":"COUNT(DISTINCT user_id)","spark_sql":"COUNT(DISTINCT user_id)","pyspark":"F.countDistinct('user_id')"},
+      "source_columns":["core.users.user_id"],
+      "compatible_grains":["dim1","dim2"],
+      "requires_group_by":true,
+      "is_grain":false,
+      "isPK":false,
+      "isFK":false,
+      "nullable":false
+    }]
   }],
-  "relationships": [{ 
-    "from": { "table": "t1", "column": "c1" }, 
-    "to": { "table": "t2", "column": "c2" }, 
-    "type": "many-to-one|one-to-many|one-to-one" 
-  }]
+  "relationships":[
+    {"from":{"table":"output"},"to":{"table":"source"},"type":"lineage","relationship_role":"data_dependency","source_filters":["posted_at >= DATE '2025-01-01'"]},
+    {"from":{"table":"t1","column":"id"},"to":{"table":"t2","column":"id"},"type":"join","relationship_role":"join_path","join_type":"LEFT","on_sql":"a.id = b.id","on_sql_normalized":"t1.id = t2.id","cardinality":"unknown","cardinality_basis":"heuristic","cardinality_confidence":0.3}
+  ]
 }
 
-Infer column types from context (VARCHAR, INT, DATE, TIMESTAMP, DECIMAL, BOOLEAN, etc.).
-Identify JOINs as relationships. Infer tableType from file path if present (e.g., /gold/ -> gold).`;
+## TABLE TYPE INFERENCE
+raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executive, black=ML`;
 
       const maxRetries = 2;
       let lastError = null;
@@ -8544,7 +9649,9 @@ Identify JOINs as relationships. Infer tableType from file path if present (e.g.
                 table.tableType = matchingFile.tableType;
               }
             });
-            return result;
+            
+            // Validate and clean the result
+            return validateSchemaResult(result);
           }
         } catch (e) {
           console.error(`Schema analysis attempt ${attempt + 1} failed:`, e);
@@ -8581,7 +9688,7 @@ Identify JOINs as relationships. Infer tableType from file path if present (e.g.
           reasoning: {
             effort: reasoningEffort
           },
-          max_output_tokens: 8000  // Higher limit for schema analysis
+          max_output_tokens: 32000  // Higher limit for schema analysis
         };
 
         const response = await fetch('https://api.openai.com/v1/responses', {
@@ -8631,11 +9738,46 @@ Identify JOINs as relationships. Infer tableType from file path if present (e.g.
         const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || 
                          content.match(/```\n?([\s\S]*?)\n?```/) || 
                          content.match(/(\{[\s\S]*\})/);
-        if (jsonMatch) {
-          const jsonStr = jsonMatch[1] || jsonMatch[0];
-          return JSON.parse(jsonStr.trim());
+        
+        let jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
+        jsonStr = jsonStr.trim();
+        
+        // Attempt to parse JSON, with recovery for truncated responses
+        try {
+          return JSON.parse(jsonStr);
+        } catch (parseError) {
+          // If response was truncated, try to salvage partial JSON
+          if (data.status === 'incomplete') {
+            console.warn('Attempting to recover truncated JSON...');
+            
+            // Try to find the last complete table or relationship entry
+            const tablesMatch = jsonStr.match(/"tables"\s*:\s*\[([\s\S]*)\]/);
+            if (tablesMatch) {
+              // Find last complete object in tables array
+              let tablesContent = tablesMatch[1];
+              let lastCompleteIdx = tablesContent.lastIndexOf('},');
+              if (lastCompleteIdx === -1) lastCompleteIdx = tablesContent.lastIndexOf('}');
+              
+              if (lastCompleteIdx > 0) {
+                tablesContent = tablesContent.substring(0, lastCompleteIdx + 1);
+                const recoveredJson = `{"tables":[${tablesContent}],"relationships":[]}`;
+                
+                try {
+                  const recovered = JSON.parse(recoveredJson);
+                  console.warn(`Recovered ${recovered.tables?.length || 0} tables from truncated response`);
+                  showToast('Response was truncated - some data may be incomplete', 'warning');
+                  return recovered;
+                } catch (e) {
+                  // Recovery failed
+                }
+              }
+            }
+            
+            throw new Error('API response was truncated (max_output_tokens reached). Try processing fewer files at once.');
+          }
+          
+          throw parseError;
         }
-        return JSON.parse(content.trim());
 
       } catch (e) {
         console.error('Schema analysis API error:', e);
@@ -8710,18 +9852,70 @@ Identify JOINs as relationships. Infer tableType from file path if present (e.g.
         tablesList.innerHTML = '<p class="text-sm text-gray-500">No tables detected</p>';
       }
       
-      // Render relationships
+      // Render relationships - group by type
       const relsList = document.getElementById('process-relationships-list');
       if (detected.relationships && detected.relationships.length > 0) {
-        relsList.innerHTML = detected.relationships.map((r, i) => `
-          <div class="flex items-center gap-2 p-2 bg-surface-light rounded-lg">
-            <input type="checkbox" checked class="accent-primary" data-process-rel="${i}">
-            <span class="font-mono text-xs text-accent">${r.from?.table || '?'}.${r.from?.column || '?'}</span>
-            <span class="material-symbols-outlined text-sm text-primary">arrow_forward</span>
-            <span class="font-mono text-xs text-accent">${r.to?.table || '?'}.${r.to?.column || '?'}</span>
-            <span class="text-xs text-gray-500 ml-auto">${r.type || 'related'}</span>
-          </div>
-        `).join('');
+        // Group relationships by type
+        const fkRels = detected.relationships.filter(r => !['lineage', 'join_condition', 'join'].includes(r.type));
+        const lineageRels = detected.relationships.filter(r => r.type === 'lineage');
+        const joinRels = detected.relationships.filter(r => r.type === 'join_condition' || r.type === 'join');
+        
+        let html = '';
+        
+        // FK Relationships
+        if (fkRels.length > 0) {
+          html += '<div class="text-xs font-medium text-gray-400 mb-2">Foreign Key Relationships:</div>';
+          html += fkRels.map((r, i) => {
+            const idx = detected.relationships.indexOf(r);
+            return `
+              <div class="flex items-center gap-2 p-2 bg-surface-light rounded-lg mb-1">
+                <input type="checkbox" checked class="accent-primary" data-process-rel="${idx}">
+                <span class="font-mono text-xs text-accent">${r.from?.table || '?'}.${r.from?.column || '?'}</span>
+                <span class="material-symbols-outlined text-sm text-primary">arrow_forward</span>
+                <span class="font-mono text-xs text-accent">${r.to?.table || '?'}.${r.to?.column || '?'}</span>
+                <span class="text-xs text-gray-500 ml-auto">${r.type || 'related'}</span>
+              </div>
+            `;
+          }).join('');
+        }
+        
+        // Lineage Relationships
+        if (lineageRels.length > 0) {
+          html += '<div class="text-xs font-medium text-green-400 mb-2 mt-3">Data Lineage (depends on):</div>';
+          html += lineageRels.map((r, i) => {
+            const idx = detected.relationships.indexOf(r);
+            return `
+              <div class="flex items-center gap-2 p-2 bg-green-900/20 border border-green-800/30 rounded-lg mb-1">
+                <input type="checkbox" checked class="accent-green-500" data-process-rel="${idx}">
+                <span class="font-mono text-xs text-green-400">${r.from?.table || '?'}</span>
+                <span class="material-symbols-outlined text-sm text-green-500">trending_flat</span>
+                <span class="text-xs text-gray-400">depends on</span>
+                <span class="material-symbols-outlined text-sm text-green-500">trending_flat</span>
+                <span class="font-mono text-xs text-green-400">${r.to?.table || '?'}</span>
+              </div>
+            `;
+          }).join('');
+        }
+        
+        // Join Relationships (source table connections)
+        if (joinRels.length > 0) {
+          html += '<div class="text-xs font-medium text-blue-400 mb-2 mt-3">Source Table Joins:</div>';
+          html += joinRels.map((r, i) => {
+            const idx = detected.relationships.indexOf(r);
+            const joinType = r.join_type ? `[${r.join_type}]` : '';
+            return `
+              <div class="flex items-center gap-2 p-2 bg-blue-900/20 border border-blue-800/30 rounded-lg mb-1">
+                <input type="checkbox" checked class="accent-blue-500" data-process-rel="${idx}">
+                <span class="font-mono text-xs text-blue-400">${r.from?.table || '?'}${r.from?.column ? '.' + r.from.column : ''}</span>
+                <span class="material-symbols-outlined text-sm text-blue-500">link</span>
+                <span class="font-mono text-xs text-blue-400">${r.to?.table || '?'}${r.to?.column ? '.' + r.to.column : ''}</span>
+                <span class="text-xs text-gray-500 ml-auto">${joinType}</span>
+              </div>
+            `;
+          }).join('');
+        }
+        
+        relsList.innerHTML = html;
       } else {
         relsList.innerHTML = '<p class="text-sm text-gray-500">No relationships detected</p>';
       }
@@ -8760,15 +9954,38 @@ Identify JOINs as relationships. Infer tableType from file path if present (e.g.
         const tableDescInput = document.querySelector(`[data-process-table-desc="${idx}"]`);
         const tableDescription = tableDescInput?.value || table.description || '';
         
-        // Get edited column descriptions
+        // Get edited column descriptions and preserve all metadata (including IR and renderings)
         const columnsWithDescriptions = (table.columns || []).map((col, ci) => {
           const colDescInput = document.querySelector(`[data-process-col-desc="${idx}-${ci}"]`);
+          const colKey = `${table.name.toLowerCase()}.${col.name.toLowerCase()}`;
           return {
+            id: col.id || `col_${stableHash(colKey)}`,
             name: col.name,
             type: col.type || 'VARCHAR',
             description: colDescInput?.value || col.description || '',
-            primaryKey: col.isPK || false,
-            nullable: true
+            semantic_role: col.semantic_role,
+            aggregation_type: col.aggregation_type,
+            // Expression fields - multi-dialect support
+            expression_sql_original: col.expression_sql_original || col.expression_sql,
+            expression_sql_normalized: col.expression_sql_normalized,
+            expression_ir: col.expression_ir,
+            renderings: col.renderings,
+            // Legacy field for backward compatibility
+            expression_sql: col.expression_sql_normalized || col.expression_sql,
+            // Source tracking
+            source_columns: col.source_columns,
+            via_steps: col.via_steps,
+            // Key modeling
+            is_grain: col.is_grain || false,
+            compatible_grains: col.compatible_grains,
+            requires_group_by: col.requires_group_by,
+            // Metadata
+            inferred_from_query: col.inferred_from_query || false,
+            type_confidence: col.type_confidence,
+            inferred_from: col.inferred_from,
+            isPK: col.isPK || false,
+            isFK: col.isFK || false,
+            nullable: col.nullable !== undefined ? col.nullable : null
           };
         });
         
@@ -8797,12 +10014,22 @@ Identify JOINs as relationships. Infer tableType from file path if present (e.g.
           // Update table type if provided
           if (tableType) existing.tableType = tableType;
         } else {
-          // Add new table with descriptions
+          // Add new table with descriptions (using stable hash-based ID)
           ERDState.tables.push({
-            id: 'table_' + Date.now() + '_' + idx,
+            id: `table_${stableHash(table.name.toLowerCase())}`,
             name: table.name,
             description: tableDescription,
             tableType: tableType,
+            schema_source: table.schema_source || (table.is_stub ? 'query_inferred' : 'ctas_output'),
+            is_stub: table.is_stub || false,
+            is_aggregated: table.is_aggregated || false,
+            grain_columns: table.grain_columns || [],
+            unique_key: table.unique_key || [],
+            primary_key: table.primary_key || table.grain_columns || [],
+            // Filters - both original and normalized
+            filters_original: table.filters_original || table.filters || [],
+            filters_normalized: table.filters_normalized || [],
+            filters: table.filters || [], // Legacy
             x: 100 + (ERDState.tables.length % 4) * 250,
             y: 100 + Math.floor(ERDState.tables.length / 4) * 200,
             columns: columnsWithDescriptions
@@ -8816,21 +10043,48 @@ Identify JOINs as relationships. Infer tableType from file path if present (e.g.
         const rel = detected.relationships[idx];
         if (!rel) return;
         
-        // Check if relationship already exists
-        const exists = ERDState.relationships.some(r => 
-          r.from.table.toLowerCase() === rel.from.table.toLowerCase() &&
-          r.from.column.toLowerCase() === rel.from.column.toLowerCase() &&
-          r.to.table.toLowerCase() === rel.to.table.toLowerCase() &&
-          r.to.column.toLowerCase() === rel.to.column.toLowerCase()
-        );
+        // Check if relationship already exists (handle lineage without columns)
+        const isLineage = rel.type === 'lineage';
+        const exists = ERDState.relationships.some(r => {
+          if (isLineage) {
+            // For lineage, just compare tables
+            return r.type === 'lineage' &&
+              r.from.table.toLowerCase() === rel.from.table.toLowerCase() &&
+              r.to.table.toLowerCase() === rel.to.table.toLowerCase();
+          }
+          // For FK/join relationships, compare tables and columns
+          return r.from.table.toLowerCase() === rel.from.table.toLowerCase() &&
+            (r.from.column || '').toLowerCase() === (rel.from.column || '').toLowerCase() &&
+            r.to.table.toLowerCase() === rel.to.table.toLowerCase() &&
+            (r.to.column || '').toLowerCase() === (rel.to.column || '').toLowerCase();
+        });
         
         if (!exists) {
-          ERDState.relationships.push({
-            id: 'rel_' + Date.now() + '_' + idx,
+          // Generate stable hash-based ID for relationship
+          const relKey = `${rel.type || 'rel'}:${rel.from?.table || ''}:${rel.from?.column || ''}:${rel.to?.table || ''}:${rel.to?.column || ''}`;
+          const newRel = {
+            id: `rel_${stableHash(relKey)}`,
             from: rel.from,
             to: rel.to,
-            type: rel.type || 'many-to-one'
-          });
+            type: rel.type || 'many-to-one',
+            relationship_role: rel.relationship_role || (rel.type === 'lineage' ? 'data_dependency' : 'join_path'),
+            // Join metadata
+            join_type: rel.join_type,
+            on_sql: rel.on_sql,
+            on_sql_normalized: rel.on_sql_normalized,
+            // Cardinality with confidence
+            cardinality: rel.cardinality || 'unknown',
+            cardinality_confidence: rel.cardinality_confidence || 0,
+            cardinality_basis: rel.cardinality_basis || 'unknown',
+            confidence: rel.confidence,
+            // Source-specific filters for lineage edges
+            source_filters: rel.source_filters
+          };
+          // Include join_keys if present (legacy)
+          if (rel.join_keys) {
+            newRel.join_keys = rel.join_keys;
+          }
+          ERDState.relationships.push(newRel);
         }
       });
       
