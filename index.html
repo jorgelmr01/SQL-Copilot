@@ -1320,11 +1320,16 @@
         </button>
       </nav>
 
-      <!-- Recent Queries -->
+      <!-- Query History -->
       <div class="mt-4 px-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wider mb-2 px-3">Recent Queries</p>
-        <div id="recent-queries-list" class="space-y-1 max-h-32 overflow-auto">
-          <!-- Populated by JavaScript -->
+        <div class="flex items-center justify-between mb-2 px-3">
+          <p class="text-xs text-gray-500 uppercase tracking-wider">Query History</p>
+          <button onclick="clearQueryHistory()" class="text-xs text-gray-500 hover:text-error transition-colors" title="Clear history">
+            <span class="material-symbols-outlined text-xs">delete_sweep</span>
+          </button>
+        </div>
+        <div id="recent-queries-list" class="space-y-2 max-h-64 overflow-auto pr-1">
+          <!-- Populated by JavaScript with expandable query cards -->
         </div>
       </div>
 
@@ -1584,14 +1589,18 @@
                 </div>
 
                 <!-- Action Buttons -->
-                <div class="mt-8 flex gap-3">
+                <div class="mt-8 flex flex-wrap gap-3">
                   <button onclick="navigateGenerateStep(2)" class="px-6 py-3 bg-surface-light hover:bg-surface-lighter text-gray-300 rounded-xl font-medium text-sm transition-colors flex items-center gap-2">
                     <span class="material-symbols-outlined text-sm">arrow_back</span>
                     Back
                   </button>
+                  <button onclick="skipMapping()" class="px-6 py-3 bg-surface-light hover:bg-amber-900/30 text-amber-400 border border-amber-600/30 rounded-xl font-medium text-sm transition-colors flex items-center gap-2" title="Generate SQL with placeholder variable names for testing">
+                    <span class="material-symbols-outlined text-sm">skip_next</span>
+                    Skip & Use Placeholders
+                  </button>
                   <button onclick="acceptAllSuggestions()" id="btn-accept-all" class="flex-1 bg-surface-light hover:bg-primary/20 text-gray-300 py-3 px-4 rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined text-sm">auto_awesome</span>
-                    Accept All AI Suggestions
+                    Accept All Suggestions
                   </button>
                   <button onclick="confirmMappings()" class="flex-1 bg-primary hover:bg-primary-dark text-white py-3 px-4 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-colors">
                     <span class="material-symbols-outlined text-sm">arrow_forward</span>
@@ -3130,27 +3139,151 @@
       const list = document.getElementById('recent-queries-list');
       list.innerHTML = '';
       
-      const recentQueries = AppState.context.queries.slice(-10).reverse();
+      const recentQueries = AppState.context.queries.slice(-15).reverse();
       
       if (recentQueries.length === 0) {
-        list.innerHTML = '<p class="text-xs text-gray-500 px-3">No recent queries</p>';
+        list.innerHTML = '<p class="text-xs text-gray-500 px-3 text-center py-4">No saved queries yet</p>';
         return;
       }
       
       recentQueries.forEach((query, index) => {
-        const item = document.createElement('button');
-        item.className = 'w-full text-left px-3 py-2 rounded-lg hover:bg-surface-light transition-colors text-sm truncate text-gray-400';
-        item.textContent = query.prompt.substring(0, 40) + (query.prompt.length > 40 ? '...' : '');
-        item.onclick = () => loadQuery(query);
-        list.appendChild(item);
+        const queryId = query.id || `legacy_${index}`;
+        const title = query.title || generateQueryTitle(query.prompt);
+        const timeAgo = formatTimeAgo(query.lastModified || query.timestamp);
+        const sqlPreview = query.sql ? query.sql.split('\n').slice(0, 2).join('\n').substring(0, 80) : '';
+        
+        const card = document.createElement('div');
+        card.className = 'bg-surface-light rounded-lg overflow-hidden';
+        card.id = `query-card-${queryId}`;
+        
+        card.innerHTML = `
+          <button onclick="toggleQueryCard('${queryId}')" class="w-full text-left p-2 hover:bg-surface-lighter transition-colors">
+            <div class="flex items-start gap-2">
+              <span class="material-symbols-outlined text-xs text-gray-500 mt-0.5 query-expand-icon" id="expand-icon-${queryId}">chevron_right</span>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-gray-300 truncate">${escapeHtml(title)}</div>
+                <div class="text-xs text-gray-500">${timeAgo}</div>
+              </div>
+            </div>
+          </button>
+          <div id="query-details-${queryId}" class="view-hidden border-t border-surface px-2 pb-2">
+            ${sqlPreview ? `
+              <div class="mt-2 p-2 bg-surface rounded text-xs font-mono text-gray-400 overflow-hidden max-h-16">
+                <pre class="whitespace-pre-wrap">${escapeHtml(sqlPreview)}${query.sql && query.sql.length > 80 ? '...' : ''}</pre>
+              </div>
+            ` : '<p class="text-xs text-gray-500 mt-2">No SQL generated</p>'}
+            <div class="flex gap-1 mt-2">
+              <button onclick="loadQueryById('${queryId}')" class="flex-1 px-2 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded text-xs flex items-center justify-center gap-1 transition-colors">
+                <span class="material-symbols-outlined text-xs">play_arrow</span>
+                Load
+              </button>
+              <button onclick="copyQuerySQL('${queryId}')" class="px-2 py-1.5 bg-surface hover:bg-surface-lighter text-gray-400 rounded text-xs flex items-center justify-center gap-1 transition-colors" title="Copy SQL">
+                <span class="material-symbols-outlined text-xs">content_copy</span>
+              </button>
+              <button onclick="deleteQuery('${queryId}')" class="px-2 py-1.5 bg-surface hover:bg-error/20 text-gray-400 hover:text-error rounded text-xs flex items-center justify-center gap-1 transition-colors" title="Delete">
+                <span class="material-symbols-outlined text-xs">delete</span>
+              </button>
+            </div>
+          </div>
+        `;
+        
+        list.appendChild(card);
       });
+    }
+    
+    function toggleQueryCard(queryId) {
+      const details = document.getElementById(`query-details-${queryId}`);
+      const icon = document.getElementById(`expand-icon-${queryId}`);
+      
+      if (details.classList.contains('view-hidden')) {
+        // Collapse all other cards first
+        document.querySelectorAll('[id^="query-details-"]').forEach(el => {
+          el.classList.add('view-hidden');
+        });
+        document.querySelectorAll('.query-expand-icon').forEach(el => {
+          el.textContent = 'chevron_right';
+        });
+        
+        // Expand this card
+        details.classList.remove('view-hidden');
+        icon.textContent = 'expand_more';
+      } else {
+        details.classList.add('view-hidden');
+        icon.textContent = 'chevron_right';
+      }
+    }
+    
+    function loadQueryById(queryId) {
+      const query = AppState.context.queries.find(q => q.id === queryId || `legacy_${AppState.context.queries.indexOf(q)}` === queryId);
+      if (query) {
+        loadQuery(query);
+      }
+    }
+    
+    function copyQuerySQL(queryId) {
+      const query = AppState.context.queries.find(q => q.id === queryId || `legacy_${AppState.context.queries.indexOf(q)}` === queryId);
+      if (query && query.sql) {
+        navigator.clipboard.writeText(query.sql);
+        showToast('SQL copied to clipboard', 'success');
+      }
+    }
+    
+    function deleteQuery(queryId) {
+      const index = AppState.context.queries.findIndex(q => q.id === queryId || `legacy_${AppState.context.queries.indexOf(q)}` === queryId);
+      if (index >= 0) {
+        AppState.context.queries.splice(index, 1);
+        saveContext();
+        updateRecentQueries();
+        updateContextInfo();
+        showToast('Query deleted', 'success');
+      }
+    }
+    
+    function clearQueryHistory() {
+      if (confirm('Clear all query history? This cannot be undone.')) {
+        AppState.context.queries = [];
+        saveContext();
+        updateRecentQueries();
+        updateContextInfo();
+        showToast('History cleared', 'success');
+      }
     }
 
     function loadQuery(query) {
-      AppState.currentQuery = { ...query };
+      // Restore full query state
+      AppState.currentQuery = {
+        prompt: query.prompt || '',
+        logic: query.logic || null,
+        mappings: query.mappings || {},
+        variables: query.variables || [],
+        sql: query.sql || '',
+        placeholderMode: query.placeholderMode || false
+      };
+      
+      // Restore chat history if available
+      AppState.chatHistory = query.chatHistory ? [...query.chatHistory] : [];
+      
+      // Set prompt input
       document.getElementById('query-input').value = query.prompt;
-      navigateToMode('generate');
-      showToast('Query loaded', 'success');
+      
+      // If there's SQL, go directly to Step 4 to show the result
+      if (query.sql) {
+        navigateToMode('generate');
+        AppState.generateStep = 4;
+        updateUI();
+        
+        // Update the SQL display
+        document.getElementById('sql-editor').textContent = query.sql;
+        
+        // Render chat history if available
+        renderChatHistory();
+        
+        showToast('Query loaded - you can continue refining it', 'success');
+      } else {
+        // No SQL yet, go to Step 1
+        navigateToMode('generate');
+        showToast('Query loaded', 'success');
+      }
     }
 
     function startNewChat() {
@@ -3159,10 +3292,23 @@
         logic: null,
         mappings: {},
         sql: '',
-        variables: []
+        variables: [],
+        placeholderMode: false
       };
       AppState.chatHistory = [];
       document.getElementById('query-input').value = '';
+      
+      // Clear the chat messages container
+      const chatContainer = document.getElementById('chat-messages');
+      if (chatContainer) {
+        chatContainer.innerHTML = `
+          <div class="text-center py-4 text-gray-500 text-sm">
+            <p>Chat with AI to refine your query</p>
+            <p class="text-xs mt-1">Try "Add a filter for active users" or "Change the date range"</p>
+          </div>
+        `;
+      }
+      
       navigateToMode('generate');
     }
 
@@ -4195,13 +4341,16 @@ If no good match exists, set suggestion to null.`;
       });
       
       AppState.currentQuery.mappings = mappings;
+      AppState.currentQuery.placeholderMode = false;  // Clear placeholder mode
       saveContext();
       generateSQLQuery();
     }
 
     function skipMapping() {
-      // Skip all and use dummy variables
+      // Skip all mappings and generate with placeholder variable names
       AppState.currentQuery.mappings = {};
+      AppState.currentQuery.placeholderMode = true;  // Flag for placeholder generation
+      showToast('Generating with placeholder variables for testing', 'info');
       generateSQLQuery();
     }
 
@@ -4209,6 +4358,7 @@ If no good match exists, set suggestion to null.`;
       showLoading('Generating SQL query...');
 
       const selectedDialect = AppState.selectedDialect || 'presto';
+      const isPlaceholderMode = AppState.currentQuery.placeholderMode || false;
       
       // Get rich schema context with expressions
       const schemaContext = getSchemaContextForAI({ 
@@ -4218,6 +4368,7 @@ If no good match exists, set suggestion to null.`;
       });
       const mappings = AppState.currentQuery.mappings || {};
       const logic = AppState.currentQuery.logic || {};
+      const variables = AppState.currentQuery.variables || [];
       
       // Build a clear mapping table for the AI
       const mappingTable = Object.entries(mappings)
@@ -4228,24 +4379,39 @@ If no good match exists, set suggestion to null.`;
       const expressionPatterns = getExpressionPatterns();
       const joinPaths = getJoinPaths();
       
+      // Generate placeholder instructions when in placeholder mode
+      let placeholderInstructions = '';
+      if (isPlaceholderMode && variables.length > 0) {
+        placeholderInstructions = `
+PLACEHOLDER MODE ACTIVE:
+Generate a working SQL query using the following placeholder variable names directly.
+These are test/dummy names - use them as-is in the SQL:
+${variables.map(v => `  - ${v}`).join('\n')}
+
+Use these placeholder names directly in your SQL (e.g., FROM {{table_name}}, SELECT {{column_name}}).
+The query should be syntactically valid except for the placeholder names wrapped in {{ }}.
+This allows the user to test the query structure before mapping to real tables.
+`;
+      }
+      
       const systemPrompt = `You are an expert ${getDialectDisplayName(selectedDialect)} query generator.
 
-Generate a ${selectedDialect.toUpperCase()} query based on the approved logic and variable mappings.
+Generate a ${selectedDialect.toUpperCase()} query based on the approved logic${isPlaceholderMode ? ' using placeholder variable names' : ' and variable mappings'}.
 
 TARGET DIALECT: ${selectedDialect}
 ${selectedDialect === 'presto' ? 'Use Presto/Trino SQL syntax (compatible with AWS Athena).' : ''}
 ${selectedDialect === 'spark' ? 'Use Spark SQL syntax (compatible with AWS EMR).' : ''}
 ${selectedDialect === 'pyspark' ? 'Generate PySpark DataFrame code (compatible with EMR Serverless). Use the DataFrame API with .select(), .filter(), .groupBy(), .agg(), etc.' : ''}
-
-STRICT VARIABLE CONSTRAINT - CRITICAL:
+${placeholderInstructions}
+${!isPlaceholderMode ? `STRICT VARIABLE CONSTRAINT - CRITICAL:
 You may ONLY use the following mapped variables in your SQL. DO NOT introduce ANY new table or column names.
 
 APPROVED VARIABLE MAPPINGS:
-${mappingTable || '(No mappings provided - use placeholder names)'}
+${mappingTable || '(No mappings provided - use descriptive placeholder names like {{table_name}}, {{column_name}})'}
 
 Full mappings object: ${JSON.stringify(mappings)}
 
-If a placeholder was not mapped (value is empty or same as placeholder), keep it as a comment like /* {{PLACEHOLDER}} - needs mapping */
+If a placeholder was not mapped (value is empty or same as placeholder), keep it as a comment like /* {{PLACEHOLDER}} - needs mapping */` : ''}
 
 Query Logic:
 ${JSON.stringify(logic.queryPlan || logic)}
@@ -4263,16 +4429,19 @@ The schema shows these proven join paths - prefer using these when applicable:
 ${joinPaths}
 
 RULES:
-1. ONLY use table and column names from the APPROVED VARIABLE MAPPINGS above
+${isPlaceholderMode ? `1. Use the placeholder variable names wrapped in {{ }} directly in the SQL
+2. Make the query syntactically correct except for placeholder names
+3. Add comments explaining what each placeholder represents
+4. Write clean, efficient SQL structure that can be easily adapted` : `1. ONLY use table and column names from the APPROVED VARIABLE MAPPINGS above
 2. DO NOT use any table or column name that is not in the mappings
-3. If you need a variable that wasn't mapped, leave a comment: /* MISSING: description of what's needed */
+3. If you need a variable that wasn't mapped, leave a comment: /* MISSING: description of what's needed */`}
 4. Write clean, efficient SQL with helpful comments
 5. Return ONLY the SQL query, no explanations before or after
 6. For columns marked with aggregation types ({SUM}, {COUNT}, etc.), apply consistent aggregation patterns
 7. Respect table grain levels - don't aggregate beyond what the data supports
 8. Use the expression patterns from the schema as templates for similar calculations
 
-If the mappings are insufficient to write the query, return SQL with clear comments indicating what's missing.`;
+${isPlaceholderMode ? 'Generate the query with placeholder names - this is for testing the query structure.' : 'If the mappings are insufficient to write the query, return SQL with clear comments indicating what\'s missing.'}`;
 
       const result = await callOpenAI(systemPrompt, AppState.currentQuery.prompt);
       hideLoading();
@@ -4689,7 +4858,14 @@ If the mappings are insufficient to write the query, return SQL with clear comme
     }
 
     // ==================== CHAT FUNCTIONS ====================
-    function addChatMessage(role, content) {
+    
+    /**
+     * Render a single chat message to the container
+     * @param {string} role - 'user' or 'assistant'
+     * @param {string} content - Message content
+     * @param {boolean} addToHistory - Whether to add to chatHistory array
+     */
+    function addChatMessage(role, content, addToHistory = true) {
       const container = document.getElementById('chat-messages');
       const message = document.createElement('div');
       message.className = `chat-message flex gap-3 ${role === 'user' ? 'flex-row-reverse' : ''}`;
@@ -4712,7 +4888,33 @@ If the mappings are insufficient to write the query, return SQL with clear comme
       container.appendChild(message);
       container.scrollTop = container.scrollHeight;
       
-      AppState.chatHistory.push({ role, content });
+      if (addToHistory) {
+        AppState.chatHistory.push({ role, content });
+      }
+    }
+    
+    /**
+     * Render all chat history messages (used when loading a saved query)
+     */
+    function renderChatHistory() {
+      const container = document.getElementById('chat-messages');
+      container.innerHTML = '';  // Clear existing messages
+      
+      if (!AppState.chatHistory || AppState.chatHistory.length === 0) {
+        // Add a welcome message if no history
+        container.innerHTML = `
+          <div class="text-center py-4 text-gray-500 text-sm">
+            <p>Chat with AI to refine your query</p>
+            <p class="text-xs mt-1">Try "Add a filter for active users" or "Change the date range"</p>
+          </div>
+        `;
+        return;
+      }
+      
+      // Render each message from history without adding to history again
+      AppState.chatHistory.forEach(msg => {
+        addChatMessage(msg.role, msg.content, false);  // Don't add to history
+      });
     }
 
     async function sendChatMessage() {
@@ -4799,17 +5001,79 @@ The user wants to modify the query. Make the requested changes and return ONLY t
       showToast('SQL copied! AWS integration coming soon', 'info');
     }
 
+    /**
+     * Generate a short title from a prompt for display in history
+     */
+    function generateQueryTitle(prompt) {
+      if (!prompt) return 'Untitled Query';
+      // Take first sentence or first 50 chars
+      const firstSentence = prompt.split(/[.!?\n]/)[0].trim();
+      if (firstSentence.length <= 50) return firstSentence;
+      return firstSentence.substring(0, 47) + '...';
+    }
+    
+    /**
+     * Format timestamp for display (e.g., "2 min ago", "yesterday")
+     */
+    function formatTimeAgo(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'just now';
+      if (diffMins < 60) return `${diffMins} min ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      if (diffDays === 1) return 'yesterday';
+      if (diffDays < 7) return `${diffDays} days ago`;
+      return date.toLocaleDateString();
+    }
+
     async function saveQueryToContext() {
       if (AppState.currentQuery.sql) {
-        AppState.context.queries.push({
+        const timestamp = new Date().toISOString();
+        const queryId = 'query_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        // Check if this is an update to an existing query (by matching prompt and checking recent)
+        const existingIndex = AppState.context.queries.findIndex(q => 
+          q.prompt === AppState.currentQuery.prompt && 
+          q.id && 
+          (new Date() - new Date(q.timestamp)) < 3600000  // Within last hour
+        );
+        
+        const queryData = {
+          id: existingIndex >= 0 ? AppState.context.queries[existingIndex].id : queryId,
+          title: generateQueryTitle(AppState.currentQuery.prompt),
           prompt: AppState.currentQuery.prompt,
+          logic: AppState.currentQuery.logic || null,
+          mappings: AppState.currentQuery.mappings || {},
+          variables: AppState.currentQuery.variables || [],
           sql: AppState.currentQuery.sql,
-          timestamp: new Date().toISOString()
-        });
+          chatHistory: [...(AppState.chatHistory || [])],  // Save full chat history
+          placeholderMode: AppState.currentQuery.placeholderMode || false,
+          timestamp: existingIndex >= 0 ? AppState.context.queries[existingIndex].timestamp : timestamp,
+          lastModified: timestamp
+        };
+        
+        if (existingIndex >= 0) {
+          // Update existing query
+          AppState.context.queries[existingIndex] = queryData;
+        } else {
+          // Add new query
+          AppState.context.queries.push(queryData);
+        }
+        
+        // Keep only last 50 queries to prevent localStorage bloat
+        if (AppState.context.queries.length > 50) {
+          AppState.context.queries = AppState.context.queries.slice(-50);
+        }
+        
         saveContext();
         updateContextInfo();
         updateRecentQueries();
-        showToast('Query saved to context', 'success');
+        showToast('Query saved to history', 'success');
         
         // Track column usage statistics
         updateColumnUsageStats(AppState.currentQuery.sql);
