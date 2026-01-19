@@ -11362,6 +11362,9 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
       const detected = window.processDetectedSchema;
       const container = document.getElementById('erd-canvas-container');
       
+      // Get schema mode once at function level (used in both tables and relationships processing)
+      const isLiteMode = getSchemaMode() === 'lite';
+      
       // Add selected tables
       document.querySelectorAll('[data-process-table]:checked').forEach(cb => {
         const idx = parseInt(cb.dataset.processTable);
@@ -11375,9 +11378,6 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
         // Get edited table description
         const tableDescInput = document.querySelector(`[data-process-table-desc="${idx}"]`);
         const tableDescription = tableDescInput?.value || table.description || '';
-        
-        // Get edited column descriptions and preserve metadata based on schema mode
-        const isLiteMode = getSchemaMode() === 'lite';
         
         /**
          * Column schema (aligned with plan Part 6.2):
