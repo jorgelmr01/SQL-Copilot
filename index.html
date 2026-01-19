@@ -2786,10 +2786,100 @@
                 <div id="detected-relationships-list" class="space-y-2"></div>
               </div>
               
+              <div id="detected-new-columns" class="mb-4 view-hidden">
+                <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">New Columns for Existing Tables</p>
+                <div id="detected-new-columns-list" class="space-y-2 max-h-40 overflow-auto"></div>
+              </div>
+              
               <div class="flex gap-2">
                 <button onclick="hideSchemaDetectModal()" class="flex-1 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Skip</button>
                 <button onclick="reviewInERD()" class="flex-1 py-2 bg-surface-light hover:bg-primary/20 rounded-lg text-sm transition-colors">Review in ERD</button>
                 <button onclick="addAllDetected()" class="flex-1 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors">Add All</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Declare Variable Modal -->
+        <div id="declare-variable-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 view-hidden flex items-center justify-center">
+          <div class="bg-surface rounded-2xl w-full max-w-md shadow-2xl border border-surface-light">
+            <div class="p-4 border-b border-surface-light">
+              <h2 class="text-lg font-semibold font-space flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">add_circle</span>
+                Declare Variable: <span id="declare-var-name" class="font-mono text-accent"></span>
+              </h2>
+            </div>
+            <div class="p-4">
+              <!-- Tab buttons -->
+              <div class="flex gap-2 mb-4">
+                <button id="declare-tab-btn-existing" onclick="setDeclareMode('existing')" 
+                  class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors bg-primary text-white">
+                  Map to Existing
+                </button>
+                <button id="declare-tab-btn-new" onclick="setDeclareMode('new')" 
+                  class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors bg-surface-light text-gray-300 hover:bg-surface-lighter">
+                  Declare New
+                </button>
+              </div>
+              
+              <!-- Tab 1: Map to Existing Column -->
+              <div id="declare-tab-existing" class="space-y-3">
+                <p class="text-sm text-gray-400">Enter the existing table.column name to map this variable to:</p>
+                <input type="text" id="declare-existing-column" placeholder="e.g. ORDERS.customer_id" 
+                  class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary">
+                <div id="declare-existing-suggestions" class="max-h-32 overflow-auto space-y-1">
+                  <!-- Will be populated with schema suggestions -->
+                </div>
+              </div>
+              
+              <!-- Tab 2: Declare New Column -->
+              <div id="declare-tab-new" class="space-y-3 view-hidden">
+                <p class="text-sm text-gray-400">Declare a new table/column not yet in your schema:</p>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">Table Name</label>
+                    <input type="text" id="declare-new-table" placeholder="NEW_TABLE" 
+                      class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">Column Name</label>
+                    <input type="text" id="declare-new-column" placeholder="column_name" 
+                      class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary">
+                  </div>
+                </div>
+                
+                <div id="declare-join-section" class="p-3 bg-surface-light/50 rounded-lg space-y-2">
+                  <p class="text-xs text-gray-400 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">link</span>
+                    How does this table join to existing schema?
+                  </p>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-xs text-gray-500 mb-1">Join to Table</label>
+                      <select id="declare-join-existing-table" 
+                        class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                        <option value="">Select table...</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 mb-1">Join Column</label>
+                      <input type="text" id="declare-join-key" placeholder="e.g. customer_id" 
+                        class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="flex gap-2 mt-4">
+                <button onclick="hideDeclareVariableModal()" 
+                  class="flex-1 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">
+                  Cancel
+                </button>
+                <button onclick="applyVariableDeclaration()" 
+                  class="flex-1 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-1">
+                  <span class="material-symbols-outlined text-sm">check</span>
+                  Apply
+                </button>
               </div>
             </div>
           </div>
@@ -4026,7 +4116,8 @@ Incorporate the user's feedback and return updated JSON:
       suggestions: {},        // AI suggestions per variable
       mappings: {},           // Current mappings
       selectingVariable: null, // Variable currently being selected from schema
-      customInputVariable: null // Variable in custom input mode
+      customInputVariable: null, // Variable in custom input mode
+      newDeclarations: []     // Newly declared tables/columns not in schema
     };
 
     function approveLogic() {
@@ -4050,6 +4141,7 @@ Incorporate the user's feedback and return updated JSON:
       // Initialize mappings from saved context
       MappingState.mappings = {};
       MappingState.suggestions = {};
+      MappingState.newDeclarations = [];  // Reset new declarations
       variables.forEach(v => {
         MappingState.mappings[v] = AppState.context.glossary[v] || null;
       });
@@ -4190,10 +4282,10 @@ ${schemaContext}`;
                   <span class="material-symbols-outlined text-sm">account_tree</span>
                   Select from Schema
                 </button>
-                <button onclick="startCustomInput('${variable}')" 
+                <button onclick="openDeclareVariableModal('${variable}')" 
                   class="flex-1 px-3 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm flex items-center justify-center gap-1 transition-colors">
-                  <span class="material-symbols-outlined text-sm">edit</span>
-                  Custom Name
+                  <span class="material-symbols-outlined text-sm">add_circle</span>
+                  Declare Variable
                 </button>
                 <button onclick="skipVariable('${variable}')" 
                   class="px-3 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm text-gray-500 hover:text-gray-300 transition-colors">
@@ -4329,16 +4421,149 @@ ${schemaContext}`;
       showToast(`Mapped to ${table}.${column}`, 'success');
     }
 
-    // ==================== CUSTOM INPUT ====================
-    function startCustomInput(variable) {
-      MappingState.customInputVariable = variable;
-      renderVariableMappingCards();
+    // ==================== VARIABLE DECLARATION MODAL ====================
+    let declaringVariable = null;
+    let declareMode = 'existing'; // 'existing' or 'new'
+
+    function openDeclareVariableModal(variable) {
+      declaringVariable = variable;
+      declareMode = 'existing';
       
-      // Focus the input after render
+      // Set the variable name in the modal title
+      document.getElementById('declare-var-name').textContent = variable;
+      
+      // Reset inputs
+      document.getElementById('declare-existing-column').value = '';
+      document.getElementById('declare-new-table').value = '';
+      document.getElementById('declare-new-column').value = '';
+      document.getElementById('declare-join-key').value = '';
+      
+      // Populate existing table dropdown for join selection
+      const joinTableSelect = document.getElementById('declare-join-existing-table');
+      joinTableSelect.innerHTML = '<option value="">Select table...</option>' + 
+        ERDState.tables.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+      
+      // Populate suggestions from schema
+      populateDeclareExistingSuggestions();
+      
+      // Reset tab state
+      setDeclareMode('existing');
+      
+      // Show modal
+      document.getElementById('declare-variable-modal').classList.remove('view-hidden');
+      
+      // Focus the input
       setTimeout(() => {
-        const input = document.getElementById(`custom-input-${variable}`);
-        if (input) input.focus();
+        document.getElementById('declare-existing-column').focus();
       }, 50);
+    }
+
+    function hideDeclareVariableModal() {
+      document.getElementById('declare-variable-modal').classList.add('view-hidden');
+      declaringVariable = null;
+    }
+
+    function setDeclareMode(mode) {
+      declareMode = mode;
+      
+      // Update tab button styles
+      const existingBtn = document.getElementById('declare-tab-btn-existing');
+      const newBtn = document.getElementById('declare-tab-btn-new');
+      const existingTab = document.getElementById('declare-tab-existing');
+      const newTab = document.getElementById('declare-tab-new');
+      
+      if (mode === 'existing') {
+        existingBtn.classList.add('bg-primary', 'text-white');
+        existingBtn.classList.remove('bg-surface-light', 'text-gray-300');
+        newBtn.classList.remove('bg-primary', 'text-white');
+        newBtn.classList.add('bg-surface-light', 'text-gray-300');
+        existingTab.classList.remove('view-hidden');
+        newTab.classList.add('view-hidden');
+      } else {
+        newBtn.classList.add('bg-primary', 'text-white');
+        newBtn.classList.remove('bg-surface-light', 'text-gray-300');
+        existingBtn.classList.remove('bg-primary', 'text-white');
+        existingBtn.classList.add('bg-surface-light', 'text-gray-300');
+        newTab.classList.remove('view-hidden');
+        existingTab.classList.add('view-hidden');
+      }
+    }
+
+    function populateDeclareExistingSuggestions() {
+      const container = document.getElementById('declare-existing-suggestions');
+      const columns = [];
+      
+      ERDState.tables.forEach(table => {
+        table.columns.forEach(col => {
+          columns.push({ table: table.name, column: col.name, type: col.type });
+        });
+      });
+      
+      // Show first 10 columns as quick suggestions
+      container.innerHTML = columns.slice(0, 10).map(c => `
+        <button onclick="selectDeclareExisting('${c.table}', '${c.column}')" 
+          class="w-full text-left px-2 py-1 text-xs font-mono bg-surface-light hover:bg-primary/20 rounded transition-colors">
+          ${c.table}.${c.column} <span class="text-gray-500">(${c.type || 'UNKNOWN'})</span>
+        </button>
+      `).join('');
+      
+      if (columns.length > 10) {
+        container.innerHTML += `<p class="text-xs text-gray-500 px-2">...and ${columns.length - 10} more. Type to search.</p>`;
+      }
+    }
+
+    function selectDeclareExisting(table, column) {
+      document.getElementById('declare-existing-column').value = `${table}.${column}`;
+    }
+
+    function applyVariableDeclaration() {
+      if (!declaringVariable) return;
+      
+      if (declareMode === 'existing') {
+        // Map to existing column
+        const value = document.getElementById('declare-existing-column').value.trim();
+        if (!value) {
+          showToast('Please enter a column name', 'warning');
+          return;
+        }
+        MappingState.mappings[declaringVariable] = value;
+        showToast(`Mapped ${declaringVariable} to ${value}`, 'success');
+      } else {
+        // Declare new column
+        const table = document.getElementById('declare-new-table').value.trim();
+        const column = document.getElementById('declare-new-column').value.trim();
+        
+        if (!table || !column) {
+          showToast('Please enter both table and column names', 'warning');
+          return;
+        }
+        
+        const fullName = `${table}.${column}`;
+        MappingState.mappings[declaringVariable] = fullName;
+        
+        // Store new table/column declaration for AI context
+        MappingState.newDeclarations = MappingState.newDeclarations || [];
+        
+        const joinTable = document.getElementById('declare-join-existing-table').value;
+        const joinColumn = document.getElementById('declare-join-key').value.trim();
+        
+        MappingState.newDeclarations.push({
+          table,
+          column,
+          joinTable: joinTable || null,
+          joinColumn: joinColumn || null
+        });
+        
+        showToast(`Declared new: ${fullName}${joinTable ? ` (joins to ${joinTable})` : ''}`, 'success');
+      }
+      
+      hideDeclareVariableModal();
+      renderVariableMappingCards();
+    }
+
+    // Legacy function for backward compatibility (inline custom input)
+    function startCustomInput(variable) {
+      openDeclareVariableModal(variable);
     }
 
     function cancelCustomInput() {
@@ -4377,6 +4602,10 @@ ${schemaContext}`;
       
       AppState.currentQuery.mappings = mappings;
       AppState.currentQuery.placeholderMode = false;  // Clear placeholder mode
+      
+      // Include new declarations for AI context (new tables/columns not in schema)
+      AppState.currentQuery.newDeclarations = MappingState.newDeclarations || [];
+      
       saveContext();
       generateSQLQuery();
     }
@@ -4410,6 +4639,24 @@ ${schemaContext}`;
         .map(([placeholder, realName]) => `  ${placeholder} → ${realName}`)
         .join('\n');
       
+      // Build new declarations context (for newly declared tables/columns not in schema)
+      const newDeclarations = AppState.currentQuery.newDeclarations || [];
+      let newDeclsContext = '';
+      if (newDeclarations.length > 0) {
+        newDeclsContext = `
+NEW TABLES/COLUMNS DECLARED BY USER (not yet in schema):
+${newDeclarations.map(d => {
+  let line = `- ${d.table}.${d.column}`;
+  if (d.joinTable && d.joinColumn) {
+    line += ` (join to ${d.joinTable} via ${d.joinColumn})`;
+  }
+  return line;
+}).join('\n')}
+
+These are valid table/column references that the user has declared. Use them in your SQL with the specified join relationships.
+`;
+      }
+      
       // Get expression patterns and join paths for guidance
       const expressionPatterns = getExpressionPatterns();
       const joinPaths = getJoinPaths();
@@ -4438,15 +4685,22 @@ ${selectedDialect === 'presto' ? 'Use Presto/Trino SQL syntax (compatible with A
 ${selectedDialect === 'spark' ? 'Use Spark SQL syntax (compatible with AWS EMR).' : ''}
 ${selectedDialect === 'pyspark' ? 'Generate PySpark DataFrame code (compatible with EMR Serverless). Use the DataFrame API with .select(), .filter(), .groupBy(), .agg(), etc.' : ''}
 ${placeholderInstructions}
-${!isPlaceholderMode ? `STRICT VARIABLE CONSTRAINT - CRITICAL:
-You may ONLY use the following mapped variables in your SQL. DO NOT introduce ANY new table or column names.
+${!isPlaceholderMode ? `VARIABLE SUBSTITUTION - CRITICAL:
+You MUST replace ALL placeholders with their mapped REAL names. DO NOT use placeholder names in your SQL.
 
-APPROVED VARIABLE MAPPINGS:
-${mappingTable || '(No mappings provided - use descriptive placeholder names like {{table_name}}, {{column_name}})'}
+PLACEHOLDER → REAL NAME MAPPINGS (use the REAL NAME on the right, NOT the placeholder on the left):
+${mappingTable || '(No mappings provided)'}
 
-Full mappings object: ${JSON.stringify(mappings)}
+REAL NAMES TO USE IN YOUR SQL (use ONLY these exact names):
+${Object.values(mappings).map(v => `- ${v}`).join('\n') || '(No mappings)'}
+${newDeclsContext}
+CRITICAL RULES FOR SUBSTITUTION:
+- Your SQL must contain ONLY the real names (right side of arrows above)
+- NEVER use placeholder names like {{ORDERS_TABLE}} or ORDERS_TABLE - always use the mapped real name instead
+- If a placeholder appears in the query logic, REPLACE it with its mapped real name
+- If a placeholder was not mapped, leave a comment: /* {{PLACEHOLDER}} - needs mapping */
 
-If a placeholder was not mapped (value is empty or same as placeholder), keep it as a comment like /* {{PLACEHOLDER}} - needs mapping */` : ''}
+Example: If mapping says "{{ORDERS_TABLE}} → MAIN_TABLE", your SQL must use "MAIN_TABLE", NOT "ORDERS_TABLE"` : ''}
 
 Query Logic:
 ${JSON.stringify(logic.queryPlan || logic)}
@@ -4467,16 +4721,18 @@ RULES:
 ${isPlaceholderMode ? `1. Use the placeholder variable names wrapped in {{ }} directly in the SQL
 2. Make the query syntactically correct except for placeholder names
 3. Add comments explaining what each placeholder represents
-4. Write clean, efficient SQL structure that can be easily adapted` : `1. ONLY use table and column names from the APPROVED VARIABLE MAPPINGS above
-2. DO NOT use any table or column name that is not in the mappings
-3. If you need a variable that wasn't mapped, leave a comment: /* MISSING: description of what's needed */`}
-4. Write clean, efficient SQL with helpful comments
-5. Return ONLY the SQL query, no explanations before or after
-6. For columns marked with aggregation types ({SUM}, {COUNT}, etc.), apply consistent aggregation patterns
-7. Respect table grain levels - don't aggregate beyond what the data supports
-8. Use the expression patterns from the schema as templates for similar calculations
+4. Write clean, efficient SQL structure that can be easily adapted` : `1. SUBSTITUTE all placeholders with their mapped REAL names - use the names from "REAL NAMES TO USE" section
+2. Your SQL must NOT contain any placeholder names (like ORDERS_TABLE, CUSTOMER_ID_COLUMN) - only real mapped names
+3. DO NOT invent new table or column names${newDeclarations.length > 0 ? ' (except those in NEW TABLES/COLUMNS DECLARED BY USER)' : ''}
+4. If a variable wasn't mapped, leave a comment: /* MISSING: description of what's needed */
+${newDeclarations.length > 0 ? '5. For newly declared tables, use the specified join relationships to connect them to the existing schema' : ''}`}
+- Write clean, efficient SQL with helpful comments
+- Return ONLY the SQL query, no explanations before or after
+- For columns marked with aggregation types ({SUM}, {COUNT}, etc.), apply consistent aggregation patterns
+- Respect table grain levels - don't aggregate beyond what the data supports
+- Use the expression patterns from the schema as templates for similar calculations
 
-${isPlaceholderMode ? 'Generate the query with placeholder names - this is for testing the query structure.' : 'If the mappings are insufficient to write the query, return SQL with clear comments indicating what\'s missing.'}`;
+${isPlaceholderMode ? 'Generate the query with placeholder names - this is for testing the query structure.' : 'REMEMBER: Your final SQL must use ONLY the real mapped names. Double-check that no placeholder names remain in your output.'}`;
 
       const result = await callOpenAI(systemPrompt, AppState.currentQuery.prompt);
       hideLoading();
@@ -9465,12 +9721,40 @@ Infer column types from context. Identify JOINs as relationships.`;
     function showSchemaDetectModal(detected) {
       const tablesList = document.getElementById('detected-tables-list');
       const relsList = document.getElementById('detected-relationships-list');
+      const newColumnsList = document.getElementById('detected-new-columns-list');
+      const newColumnsSection = document.getElementById('detected-new-columns');
       
-      // Filter out existing tables
-      const newTables = detected.tables?.filter(t => 
-        !ERDState.tables.some(et => et.name.toLowerCase() === t.name.toLowerCase())
-      ) || [];
+      // Separate new tables from tables with new columns
+      const newTables = [];
+      const tablesWithNewColumns = [];  // {tableId, tableName, newColumns[]}
       
+      detected.tables?.forEach(t => {
+        const existingTable = ERDState.tables.find(et => 
+          et.name.toLowerCase() === t.name.toLowerCase()
+        );
+        
+        if (!existingTable) {
+          // Completely new table
+          newTables.push(t);
+        } else {
+          // Existing table - check for new columns
+          const newColumns = t.columns?.filter(col => 
+            !existingTable.columns.some(ec => 
+              ec.name.toLowerCase() === col.name.toLowerCase()
+            )
+          ) || [];
+          
+          if (newColumns.length > 0) {
+            tablesWithNewColumns.push({
+              tableId: existingTable.id,
+              tableName: existingTable.name,
+              newColumns: newColumns
+            });
+          }
+        }
+      });
+      
+      // Filter new relationships
       const newRels = detected.relationships?.filter(r =>
         !ERDState.relationships.some(er => 
           er.from.table === r.from.table && er.from.column === r.from.column &&
@@ -9478,10 +9762,12 @@ Infer column types from context. Identify JOINs as relationships.`;
         )
       ) || [];
 
-      if (newTables.length === 0 && newRels.length === 0) {
+      // Check if there's anything new to show
+      if (newTables.length === 0 && newRels.length === 0 && tablesWithNewColumns.length === 0) {
         return; // Nothing new to add
       }
 
+      // Render new tables section
       tablesList.innerHTML = newTables.map((t, i) => `
         <label class="flex items-center gap-2 p-2 bg-surface-light rounded-lg">
           <input type="checkbox" checked class="accent-primary" data-table-index="${i}">
@@ -9490,6 +9776,7 @@ Infer column types from context. Identify JOINs as relationships.`;
         </label>
       `).join('') || '<p class="text-xs text-gray-500">No new tables detected</p>';
 
+      // Render new relationships section
       relsList.innerHTML = newRels.map((r, i) => `
         <label class="flex items-center gap-2 p-2 bg-surface-light rounded-lg">
           <input type="checkbox" checked class="accent-primary" data-rel-index="${i}">
@@ -9497,8 +9784,38 @@ Infer column types from context. Identify JOINs as relationships.`;
         </label>
       `).join('') || '<p class="text-xs text-gray-500">No new relationships detected</p>';
 
-      // Store for later
-      window.detectedSchema = { tables: newTables, relationships: newRels };
+      // Render new columns for existing tables section
+      if (tablesWithNewColumns.length > 0) {
+        newColumnsSection.classList.remove('view-hidden');
+        newColumnsList.innerHTML = tablesWithNewColumns.map((tableInfo, tableIdx) => `
+          <div class="p-2 bg-surface-light rounded-lg">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="material-symbols-outlined text-xs text-accent">table_chart</span>
+              <span class="font-mono text-sm text-accent">${tableInfo.tableName}</span>
+            </div>
+            <div class="ml-4 space-y-1">
+              ${tableInfo.newColumns.map((col, colIdx) => `
+                <label class="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked class="accent-primary" 
+                    data-new-column data-table-idx="${tableIdx}" data-col-idx="${colIdx}">
+                  <span class="font-mono">${col.name}</span>
+                  <span class="text-gray-500">${col.type || 'UNKNOWN'}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        `).join('');
+      } else {
+        newColumnsSection.classList.add('view-hidden');
+        newColumnsList.innerHTML = '';
+      }
+
+      // Store for later - include new columns data
+      window.detectedSchema = { 
+        tables: newTables, 
+        relationships: newRels,
+        newColumns: tablesWithNewColumns
+      };
       
       document.getElementById('schema-detect-modal').classList.remove('view-hidden');
     }
@@ -9543,6 +9860,37 @@ Infer column types from context. Identify JOINs as relationships.`;
         }
       });
 
+      // Add new columns to existing tables
+      document.querySelectorAll('[data-new-column]:checked').forEach(cb => {
+        const tableIdx = parseInt(cb.dataset.tableIdx);
+        const colIdx = parseInt(cb.dataset.colIdx);
+        const tableInfo = window.detectedSchema.newColumns?.[tableIdx];
+        
+        if (tableInfo) {
+          const table = ERDState.tables.find(t => t.id === tableInfo.tableId);
+          const columnData = tableInfo.newColumns?.[colIdx];
+          
+          if (table && columnData) {
+            // Add column if it doesn't already exist (double-check)
+            if (!table.columns.some(c => c.name.toLowerCase() === columnData.name.toLowerCase())) {
+              table.columns.push({
+                name: columnData.name,
+                type: columnData.type || 'UNKNOWN',
+                isPK: columnData.isPK || false,
+                isFK: columnData.isFK || false,
+                nullable: columnData.nullable !== false,
+                description: columnData.description || ''
+              });
+            }
+          }
+        }
+      });
+
+      // Count what was added for feedback
+      const addedTables = document.querySelectorAll('[data-table-index]:checked').length;
+      const addedRels = document.querySelectorAll('[data-rel-index]:checked').length;
+      const addedColumns = document.querySelectorAll('[data-new-column]:checked').length;
+      
       await saveERDData();
       hideSchemaDetectModal();
       updateERDEmptyState();
@@ -9551,7 +9899,17 @@ Infer column types from context. Identify JOINs as relationships.`;
         renderERD();
       }
       
-      showToast('Schema elements added', 'success');
+      // Build informative toast message
+      const parts = [];
+      if (addedTables > 0) parts.push(`${addedTables} table${addedTables > 1 ? 's' : ''}`);
+      if (addedColumns > 0) parts.push(`${addedColumns} column${addedColumns > 1 ? 's' : ''}`);
+      if (addedRels > 0) parts.push(`${addedRels} relationship${addedRels > 1 ? 's' : ''}`);
+      
+      if (parts.length > 0) {
+        showToast(`Added ${parts.join(', ')} to schema`, 'success');
+      } else {
+        showToast('No changes made', 'info');
+      }
     }
 
     // ==================== TABLE TYPE CONSTANTS ====================
