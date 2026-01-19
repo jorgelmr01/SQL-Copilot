@@ -4050,13 +4050,7 @@ Incorporate the user's feedback and return updated JSON:
         return;
       }
 
-      const prompt = `Given these placeholder variables and the database schema, suggest the best matching real column for each.
-
-Variables:
-${variables.map(v => `- ${v}: ${descriptions[v] || 'No description'}`).join('\n')}
-
-Schema:
-${schemaContext}
+      const systemPrompt = `You are a database schema expert. Given placeholder variables and a database schema, suggest the best matching real column for each variable.
 
 Return JSON array:
 [{
@@ -4068,8 +4062,14 @@ Return JSON array:
 
 If no good match exists, set suggestion to null.`;
 
+      const userPrompt = `Variables to map:
+${variables.map(v => `- ${v}: ${descriptions[v] || 'No description'}`).join('\n')}
+
+Available Schema:
+${schemaContext}`;
+
       try {
-        const result = await callOpenAI(prompt, '', true);
+        const result = await callOpenAI(systemPrompt, userPrompt, true);
         if (Array.isArray(result)) {
           result.forEach(item => {
             if (item.variable && item.suggestion) {
