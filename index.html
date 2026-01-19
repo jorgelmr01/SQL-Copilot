@@ -3733,13 +3733,39 @@
         }
 
         if (parseJSON) {
-          // Try to extract JSON from the response (handles markdown code blocks)
-          const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/```\n?([\s\S]*?)\n?```/) || content.match(/(\{[\s\S]*\})/);
-          if (jsonMatch) {
-            const jsonStr = jsonMatch[1] || jsonMatch[0];
-            return JSON.parse(jsonStr.trim());
+          // First try markdown code blocks (most specific)
+          const codeBlockMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || 
+                                 content.match(/```\n?([\s\S]*?)\n?```/);
+          if (codeBlockMatch) {
+            return JSON.parse(codeBlockMatch[1].trim());
           }
-          return JSON.parse(content.trim());
+          
+          // Try direct parse if content looks like valid JSON (starts with { or [)
+          const trimmed = content.trim();
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try {
+              return JSON.parse(trimmed);
+            } catch (directParseError) {
+              // If direct parse fails, fall through to substring extraction
+            }
+          }
+          
+          // Fallback: extract JSON by finding first { or [ and parsing from there
+          const firstBrace = trimmed.indexOf('{');
+          const firstBracket = trimmed.indexOf('[');
+          
+          let jsonStart = -1;
+          if (firstBrace >= 0 && (firstBracket < 0 || firstBrace < firstBracket)) {
+            jsonStart = firstBrace;
+          } else if (firstBracket >= 0) {
+            jsonStart = firstBracket;
+          }
+          
+          if (jsonStart >= 0) {
+            return JSON.parse(trimmed.substring(jsonStart));
+          }
+          
+          return JSON.parse(trimmed);
         }
 
         return content;
@@ -4262,14 +4288,15 @@ ${schemaContext}`;
 
         return `
           <div class="mb-3">
-            <div class="schema-tree-table flex items-center gap-2">
-              <span class="material-symbols-outlined text-sm">table_chart</span>
+            <div class="schema-tree-table flex items-center gap-2 cursor-pointer hover:bg-primary/10 rounded px-1 py-0.5 -mx-1 transition-colors" onclick="selectSchemaTable('${table.name}')" title="Click to select table">
+              <span class="material-symbols-outlined text-sm text-accent">table_chart</span>
               <span class="font-medium text-sm">${table.name}</span>
               ${typeInfo ? `<span class="text-xs px-1.5 py-0.5 rounded table-type-${table.tableType}">${typeInfo.label}</span>` : ''}
+              <span class="material-symbols-outlined text-xs text-gray-500 ml-auto">arrow_forward</span>
             </div>
-            <div class="ml-2 mt-1 space-y-0.5">
+            <div class="ml-4 mt-1 space-y-0.5 border-l border-surface-lighter pl-2">
               ${(filter ? matchingColumns : table.columns).map(col => `
-                <div class="schema-tree-column flex items-center gap-2" onclick="selectSchemaColumn('${table.name}', '${col.name}')">
+                <div class="schema-tree-column flex items-center gap-2 cursor-pointer hover:bg-primary/10 rounded px-1 py-0.5 transition-colors" onclick="selectSchemaColumn('${table.name}', '${col.name}')" title="Click to select column">
                   ${col.primaryKey ? '<span class="text-warning text-xs">🔑</span>' : ''}
                   ${col.foreignKey ? '<span class="text-primary text-xs">🔗</span>' : ''}
                   <span class="font-mono text-sm">${col.name}</span>
@@ -4284,6 +4311,14 @@ ${schemaContext}`;
 
     function filterSchemaPanelTree(query) {
       renderSchemaPanelTree(query);
+    }
+
+    function selectSchemaTable(tableName) {
+      if (!MappingState.selectingVariable) return;
+      
+      MappingState.mappings[MappingState.selectingVariable] = tableName;
+      closeSchemaSelectionPanel();
+      showToast(`Mapped to table: ${tableName}`, 'success');
     }
 
     function selectSchemaColumn(table, column) {
