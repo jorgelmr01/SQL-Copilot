@@ -2361,6 +2361,60 @@
                   <p class="text-xs text-gray-500 mt-1">WHERE conditions from the query</p>
                 </div>
                 
+                <!-- Business Context Section (collapsible) -->
+                <div class="border-t border-surface-light pt-4">
+                  <button onclick="toggleBusinessContext()" class="w-full flex items-center justify-between text-sm font-medium text-gray-300 hover:text-white transition-colors">
+                    <span class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-sm">business</span>
+                      Business Context
+                    </span>
+                    <span id="business-context-chevron" class="material-symbols-outlined text-sm transition-transform">expand_more</span>
+                  </button>
+                  <div id="business-context-fields" class="mt-3 space-y-3 view-hidden">
+                    <div>
+                      <label class="block text-xs text-gray-500 mb-1">Business Domain</label>
+                      <select id="side-panel-business-domain" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                        <option value="">Not specified</option>
+                        <option value="finance">Finance</option>
+                        <option value="marketing">Marketing</option>
+                        <option value="product">Product</option>
+                        <option value="risk">Risk</option>
+                        <option value="operations">Operations</option>
+                        <option value="customer">Customer</option>
+                        <option value="hr">HR</option>
+                        <option value="sales">Sales</option>
+                        <option value="analytics">Analytics</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 mb-1">Owner (Team/Person)</label>
+                      <input type="text" id="side-panel-owner" placeholder="e.g., Data Engineering Team" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 mb-1">Tags (comma separated)</label>
+                      <input type="text" id="side-panel-tags" placeholder="e.g., kpi, revenue, monthly" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 mb-1">Refresh Frequency</label>
+                      <select id="side-panel-refresh-frequency" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                        <option value="">Not specified</option>
+                        <option value="realtime">Real-time</option>
+                        <option value="hourly">Hourly</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="on_demand">On Demand</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 mb-1">Data Quality Notes</label>
+                      <textarea id="side-panel-quality-notes" rows="2" placeholder="Known issues, caveats, data quality concerns..." class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"></textarea>
+                    </div>
+                  </div>
+                </div>
+                
                 <div class="border-t border-surface-light pt-4">
                   <div class="flex items-center justify-between mb-3">
                     <span class="text-sm font-medium">Columns</span>
@@ -2552,6 +2606,32 @@
                   <input type="checkbox" id="erd-column-nullable" checked class="accent-primary"> Nullable
                 </label>
               </div>
+              
+              <!-- Column Business Context (collapsible) -->
+              <div class="border-t border-surface-light pt-3">
+                <button type="button" onclick="toggleColumnBusinessContext()" class="w-full flex items-center justify-between text-sm text-gray-400 hover:text-white transition-colors">
+                  <span>Business Context</span>
+                  <span id="col-business-chevron" class="material-symbols-outlined text-sm">expand_more</span>
+                </button>
+                <div id="col-business-fields" class="mt-2 space-y-2 view-hidden">
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">Business Definition</label>
+                    <textarea id="erd-column-business-def" rows="2" placeholder="What this column means in business terms..." 
+                      class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"></textarea>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">Example Values (comma separated)</label>
+                    <input type="text" id="erd-column-examples" placeholder="e.g., ACTIVE, PENDING, CLOSED" 
+                      class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">Common Filters</label>
+                    <input type="text" id="erd-column-filters" placeholder="e.g., status = 'ACTIVE', amount > 0" 
+                      class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                  </div>
+                </div>
+              </div>
+              
               <div class="flex gap-2 pt-2">
                 <button onclick="hideAddColumnModal()" class="flex-1 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Cancel</button>
                 <button onclick="saveERDColumn()" class="flex-1 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors">Save Column</button>
@@ -2757,11 +2837,11 @@
       initializeFromHash();
     });
 
-    function initializeFromHash() {
+    async function initializeFromHash() {
       const hash = window.location.hash.slice(1) || 'generate';
       const [mode, step] = hash.split('/');
       
-      if (['generate', 'optimize', 'validate', 'format', 'explain', 'library', 'erd'].includes(mode)) {
+      if (['generate', 'optimize', 'validate', 'format', 'explain', 'translate', 'library', 'erd'].includes(mode)) {
         AppState.currentMode = mode;
         if (mode === 'generate' && step) {
           const stepNum = parseInt(step);
@@ -2772,9 +2852,9 @@
       }
       updateUI();
       
-      // Initialize page-specific components
+      // Initialize page-specific components (async)
       if (AppState.currentMode === 'erd') {
-        initERD();
+        await initERD();
       } else if (AppState.currentMode === 'library') {
         initLibrary();
       }
@@ -3535,10 +3615,17 @@
       AppState.currentQuery.prompt = prompt;
       showLoading('Generating query logic...');
 
-      // Include schema context if available
-      const schemaContext = getSchemaContextForAI();
+      // Include rich schema context with expressions and lineage
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: true, 
+        includeLineage: true,
+        dialect: AppState.selectedDialect || 'presto'
+      });
       
       const selectedDialect = AppState.selectedDialect || 'presto';
+      
+      // Get expression patterns for guidance
+      const expressionPatterns = getExpressionPatterns();
       
       const systemPrompt = `You are an SQL query analyzer specializing in ${getDialectDisplayName(selectedDialect)}.
 
@@ -3557,6 +3644,17 @@ CRITICAL VARIABLE RULES - YOU MUST FOLLOW THESE:
 7. Include variables for CTEs, subqueries, and derived tables if the query needs them
 
 ${schemaContext !== 'No schema defined yet.' ? `Reference Schema (for context only - still use placeholders):\n${schemaContext}\n` : ''}
+
+IMPORTANT SCHEMA INTELLIGENCE:
+- For aggregated tables (marked with tableType=gold/diamond), RESPECT their grain level when joining
+- Columns marked with {SUM}, {COUNT}, etc. are pre-computed metrics - use them directly or apply ONLY compatible re-aggregation
+- Columns marked [dimension] vs [measure] indicate their semantic purpose
+- Use the expression patterns shown (e.g., SUM(x), COUNT(DISTINCT y)) as TEMPLATES for similar calculations
+- The filters shown define each table's scope - do NOT contradict them in your query logic
+- Source lineage (from: columns) shows which raw tables feed each KPI - use this for data provenance
+- [KEY] columns define the grain/granularity - always consider these for GROUP BY decisions
+
+${expressionPatterns !== 'No expression patterns found in schema.' ? `\nEXPRESSION PATTERNS FROM SCHEMA:\n${expressionPatterns}` : ''}
 
 Return ONLY valid JSON with this exact format:
 {
@@ -4110,7 +4208,14 @@ If no good match exists, set suggestion to null.`;
     async function generateSQLQuery() {
       showLoading('Generating SQL query...');
 
-      const schemaContext = getSchemaContextForAI();
+      const selectedDialect = AppState.selectedDialect || 'presto';
+      
+      // Get rich schema context with expressions
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: true, 
+        includeLineage: true,
+        dialect: selectedDialect 
+      });
       const mappings = AppState.currentQuery.mappings || {};
       const logic = AppState.currentQuery.logic || {};
       
@@ -4119,7 +4224,9 @@ If no good match exists, set suggestion to null.`;
         .map(([placeholder, realName]) => `  ${placeholder} → ${realName}`)
         .join('\n');
       
-      const selectedDialect = AppState.selectedDialect || 'presto';
+      // Get expression patterns and join paths for guidance
+      const expressionPatterns = getExpressionPatterns();
+      const joinPaths = getJoinPaths();
       
       const systemPrompt = `You are an expert ${getDialectDisplayName(selectedDialect)} query generator.
 
@@ -4147,12 +4254,23 @@ Original Request: ${AppState.currentQuery.prompt}
 
 ${schemaContext !== 'No schema defined yet.' ? `Reference Schema:\n${schemaContext}\n` : ''}
 
+EXPRESSION GUIDANCE:
+When generating expressions similar to existing KPIs, use the same patterns for consistency:
+${expressionPatterns}
+
+JOIN GUIDANCE:
+The schema shows these proven join paths - prefer using these when applicable:
+${joinPaths}
+
 RULES:
 1. ONLY use table and column names from the APPROVED VARIABLE MAPPINGS above
 2. DO NOT use any table or column name that is not in the mappings
 3. If you need a variable that wasn't mapped, leave a comment: /* MISSING: description of what's needed */
 4. Write clean, efficient SQL with helpful comments
 5. Return ONLY the SQL query, no explanations before or after
+6. For columns marked with aggregation types ({SUM}, {COUNT}, etc.), apply consistent aggregation patterns
+7. Respect table grain levels - don't aggregate beyond what the data supports
+8. Use the expression patterns from the schema as templates for similar calculations
 
 If the mappings are insufficient to write the query, return SQL with clear comments indicating what's missing.`;
 
@@ -4610,10 +4728,22 @@ If the mappings are insufficient to write the query, return SQL with clear comme
       // Resolve @query: references
       const { message: resolvedMessage, context: refContext } = await resolveQueryReferences(message);
       
-      // Get schema context
-      const schemaContext = getSchemaContextForAI();
+      const selectedDialect = AppState.selectedDialect || 'presto';
+      
+      // Get rich schema context including expressions and lineage
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: true, 
+        includeLineage: true,
+        dialect: selectedDialect 
+      });
+      
+      // Get expression patterns and join paths for guidance
+      const expressionPatterns = getExpressionPatterns();
+      const joinPaths = getJoinPaths();
 
       const systemPrompt = `You are an SQL expert helping to refine a query based on user feedback.
+
+TARGET DIALECT: ${selectedDialect}
 
 Current SQL:
 ${AppState.currentQuery.sql}
@@ -4623,6 +4753,23 @@ Logic: ${JSON.stringify(AppState.currentQuery.logic)}
 
 ${schemaContext !== 'No schema defined yet.' ? `Database Schema:\n${schemaContext}\n` : ''}
 ${refContext ? `Referenced SQL Files:\n${refContext}\n` : ''}
+
+SCHEMA INTELLIGENCE:
+- For aggregated tables (gold/diamond layer), respect their grain level when modifying
+- Columns with {SUM}, {COUNT}, etc. are pre-computed - use compatible re-aggregation
+- Use these expression patterns for consistency:
+${expressionPatterns}
+
+- Use these proven join paths when adding joins:
+${joinPaths}
+
+MODIFICATION RULES:
+1. Maintain consistency with the existing query's patterns and style
+2. Respect the schema's grain levels and aggregation types
+3. Use expression patterns from the schema as templates
+4. Prefer defined join paths over creating new ones
+5. If the modification requires columns/tables not in schema, note this clearly
+
 The user wants to modify the query. Make the requested changes and return ONLY the updated SQL query, no explanations.`;
 
       const result = await callOpenAI(systemPrompt, resolvedMessage);
@@ -4664,6 +4811,9 @@ The user wants to modify the query. Make the requested changes and return ONLY t
         updateRecentQueries();
         showToast('Query saved to context', 'success');
         
+        // Track column usage statistics
+        updateColumnUsageStats(AppState.currentQuery.sql);
+        
         // Analyze SQL for schema elements
         try {
           const detected = await analyzeQueryForSchema(AppState.currentQuery.sql);
@@ -4692,8 +4842,18 @@ The user wants to modify the query. Make the requested changes and return ONLY t
 
       showLoading('Analyzing query for optimizations...');
 
-      const schemaContext = getSchemaContextForAI();
       const selectedDialect = AppState.selectedDialect || 'presto';
+      
+      // Get rich schema context including expressions and lineage
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: true, 
+        includeLineage: true,
+        dialect: selectedDialect 
+      });
+      
+      // Get key columns and efficient join patterns for optimization hints
+      const keyColumns = getKeyColumns();
+      const efficientJoins = getEfficientJoins();
       
       const systemPrompt = `You are an SQL optimization expert specializing in ${getDialectDisplayName(selectedDialect)}.
 
@@ -4706,12 +4866,28 @@ ${selectedDialect === 'presto' ? 'Consider Presto-specific optimizations like pr
 ${selectedDialect === 'spark' ? 'Consider Spark SQL optimizations like broadcast joins, partition pruning, and Catalyst optimizer hints.' : ''}
 ${selectedDialect === 'pyspark' ? 'Consider PySpark optimizations like caching, repartitioning, and avoiding UDFs when possible.' : ''}
 
+OPTIMIZATION CONTEXT FROM SCHEMA:
+- Tables marked 'gold'/'diamond' are PRE-AGGREGATED - avoid re-aggregating unnecessarily
+- These columns are KEY/GRAIN columns (likely indexed or partition keys):
+${keyColumns}
+
+- These join patterns are KNOWN TO WORK efficiently in this schema:
+${efficientJoins}
+
+OPTIMIZATION PRIORITIES:
+1. Use pre-aggregated tables when available instead of aggregating from raw data
+2. Leverage defined join paths instead of creating new join patterns
+3. Filter on grain/key columns when possible for partition pruning
+4. Avoid aggregating below the table's native grain level
+5. Push predicates as early as possible in the query
+6. Consider whether CTEs can replace repeated subqueries
+
 Return your response in this JSON format:
 {
   "optimizedSQL": "The optimized SQL query in ${selectedDialect} syntax",
   "optimizations": [
     {
-      "type": "Type of optimization (e.g., Index, Join, Subquery, Partitioning)",
+      "type": "Type of optimization (e.g., Index, Join, Subquery, Partitioning, Pre-aggregation)",
       "description": "What was changed and why",
       "impact": "Expected performance improvement"
     }
@@ -4757,10 +4933,59 @@ Return your response in this JSON format:
         return;
       }
 
-      showLoading('Validating SQL syntax...');
-
-      const schemaContext = getSchemaContextForAI();
       const selectedDialect = AppState.selectedDialect || 'presto';
+      
+      // PHASE 1: Run fast local validation first (no AI call needed)
+      const localIssues = validateSQLLocally(sql, selectedDialect);
+      
+      // If there are critical local errors, show them immediately without AI
+      const localErrors = localIssues.filter(i => i.severity === 'error');
+      if (localErrors.length > 0) {
+        // Show local errors immediately - they're fast and definitive
+        const statusDiv = document.getElementById('validate-status');
+        const issuesDiv = document.getElementById('validate-issues');
+        const fixedDiv = document.getElementById('validate-fixed-sql');
+        
+        statusDiv.innerHTML = `
+          <div class="flex items-center gap-2 text-error">
+            <span class="material-symbols-outlined">error</span>
+            <span class="font-medium">${localErrors.length} error(s) found (local validation)</span>
+          </div>
+        `;
+        
+        issuesDiv.innerHTML = '';
+        localErrors.forEach(issue => {
+          const div = document.createElement('div');
+          div.className = 'bg-surface-light rounded-lg p-3 border-l-4 border-error';
+          div.innerHTML = `
+            <div class="flex items-center gap-2 mb-1">
+              <span class="material-symbols-outlined text-error text-sm">error</span>
+              <span class="font-medium text-sm">${issue.message}</span>
+            </div>
+            <p class="text-xs text-gray-400">${issue.suggestion}</p>
+          `;
+          issuesDiv.appendChild(div);
+        });
+        
+        fixedDiv.classList.add('view-hidden');
+        
+        // Still continue to AI validation for full analysis...
+      }
+
+      showLoading('Validating SQL syntax with AI...');
+
+      // Get rich schema context for deep validation
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: false,  // Not needed for validation
+        includeLineage: false,
+        dialect: selectedDialect,
+        compact: true  // Use compact format for validation
+      });
+      
+      // Include local issues in prompt for AI to consider
+      const localIssuesText = localIssues.length > 0 
+        ? `\n\nLOCAL VALIDATION FINDINGS (already detected):\n${localIssues.map(i => `- [${i.severity}] ${i.message}`).join('\n')}`
+        : '';
       
       const systemPrompt = `You are an SQL syntax validator specializing in ${getDialectDisplayName(selectedDialect)}.
 
@@ -4772,6 +4997,14 @@ ${selectedDialect === 'spark' ? 'Check for Spark SQL specific syntax like LATERA
 ${selectedDialect === 'pyspark' ? 'Check for PySpark DataFrame API syntax like .select(), .filter(), .groupBy().agg(), etc.' : ''}
 
 ${schemaContext !== 'No schema defined yet.' ? `Database Schema (to validate table/column references):\n${schemaContext}\n` : ''}
+${localIssuesText}
+
+VALIDATION PRIORITIES:
+1. Verify all table and column references exist in the schema
+2. Check for grain/aggregation mismatches (e.g., aggregating without proper GROUP BY)
+3. Validate join conditions match the schema's defined relationships
+4. Check for dialect-specific syntax errors
+5. Verify data types are compatible in expressions and comparisons
 
 Return your response in this JSON format:
 {
@@ -4841,6 +5074,56 @@ Return your response in this JSON format:
       });
     }
 
+    /**
+     * Basic SQL formatting (no AI needed) - handles indentation, keywords, line breaks
+     * Per plan Part 5.2: Use client-side formatting for standard formatting tasks
+     */
+    function formatSQLLocally(sql) {
+      if (!sql) return sql;
+      
+      // SQL keywords to uppercase
+      const keywords = [
+        'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS',
+        'ON', 'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN', 'IS', 'NULL', 'AS',
+        'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'INTERSECT', 'EXCEPT',
+        'ALL', 'DISTINCT', 'WITH', 'AS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+        'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'TABLE', 'DROP',
+        'OVER', 'PARTITION', 'ROWS', 'RANGE', 'UNBOUNDED', 'PRECEDING', 'FOLLOWING', 'CURRENT'
+      ];
+      
+      let formatted = sql;
+      
+      // Uppercase keywords (careful not to change strings)
+      keywords.forEach(kw => {
+        const regex = new RegExp(`\\b${kw}\\b`, 'gi');
+        formatted = formatted.replace(regex, kw);
+      });
+      
+      // Add newlines before major clauses
+      const newlineBefore = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 
+                             'INNER JOIN', 'OUTER JOIN', 'FULL JOIN', 'CROSS JOIN',
+                             'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'UNION', 'WITH'];
+      
+      newlineBefore.forEach(clause => {
+        const regex = new RegExp(`\\s+${clause}\\b`, 'gi');
+        formatted = formatted.replace(regex, `\n${clause}`);
+      });
+      
+      // Indent SELECT columns (simple heuristic)
+      formatted = formatted.replace(/SELECT\s+/gi, 'SELECT\n  ');
+      
+      // Format comma-separated items in SELECT with newlines
+      formatted = formatted.replace(/,\s*(?=[A-Za-z_])/g, ',\n  ');
+      
+      // Clean up multiple blank lines
+      formatted = formatted.replace(/\n{3,}/g, '\n\n');
+      
+      // Trim leading/trailing whitespace per line
+      formatted = formatted.split('\n').map(line => line.trimEnd()).join('\n');
+      
+      return formatted.trim();
+    }
+    
     async function formatSQL() {
       const sql = document.getElementById('format-input').value.trim();
       if (!sql) {
@@ -4848,64 +5131,52 @@ Return your response in this JSON format:
         return;
       }
 
-      showLoading('Formatting and annotating SQL...');
+      // PHASE 1: Apply basic formatting locally (instant, no AI call)
+      const basicFormatted = formatSQLLocally(sql);
+      
+      // Show basic formatting immediately
+      document.getElementById('format-output').innerHTML = highlightSQL(basicFormatted);
+      
+      // PHASE 2: Use AI for semantic annotations (comments explaining business logic)
+      showLoading('Adding semantic comments...');
 
-      const schemaContext = getSchemaContextForAI();
       const selectedDialect = AppState.selectedDialect || 'presto';
       
-      const systemPrompt = `You are an SQL formatting and documentation expert. Format the provided SQL query for maximum readability AND add helpful inline comments to explain the logic.
+      // Get schema context for semantic understanding
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: true, 
+        includeLineage: false,
+        dialect: selectedDialect,
+        compact: true 
+      });
+      
+      const systemPrompt = `You are an SQL documentation expert. The query has already been formatted. Your ONLY job is to add helpful inline comments to explain the BUSINESS LOGIC.
 
 ${schemaContext !== 'No schema defined yet.' ? `Database Schema (for context):\n${schemaContext}\n` : ''}
 
 TARGET DIALECT: ${selectedDialect}
 
-FORMATTING RULES:
-1. Use consistent capitalization (uppercase keywords)
-2. Add proper indentation (2 spaces)
-3. Put each major clause on a new line
-4. Align columns in SELECT and conditions in WHERE
-5. Add blank lines between major sections for complex queries
-
 ANNOTATION RULES - Add comments explaining:
-1. A header comment describing what the overall query does
-2. What each CTE or subquery accomplishes
-3. Complex WHERE conditions and their business logic
+1. A header comment describing what the overall query accomplishes (business purpose)
+2. What each CTE or subquery accomplishes in business terms
+3. Complex WHERE conditions and their business meaning
 4. JOIN relationships and why tables are being joined
-5. Aggregations and what metrics they calculate
+5. Aggregations and what metrics/KPIs they calculate
 6. Any non-obvious business logic or calculations
-7. Date/time operations and their purpose
+7. Date/time operations and their business purpose
 
 COMMENT STYLE:
 - Use -- for single-line comments at the end of lines for brief explanations
 - Use /* */ for multi-line comments above complex sections
 - Keep comments concise but informative
+- Focus on BUSINESS MEANING, not SQL syntax
 
-EXAMPLE OUTPUT:
--- Main Query: Calculate total revenue by customer segment for Q4
-WITH customer_orders AS (
-    -- Aggregate orders per customer, excluding cancelled
-    SELECT 
-        customer_id,
-        SUM(order_total) AS total_spent,  -- Total order value
-        COUNT(*) AS order_count           -- Number of orders
-    FROM orders
-    WHERE status != 'CANCELLED'           -- Exclude cancelled orders
-      AND order_date >= '2024-10-01'      -- Q4 filter
-    GROUP BY customer_id
-)
-SELECT 
-    s.segment_name,
-    COUNT(DISTINCT co.customer_id) AS customer_count,
-    SUM(co.total_spent) AS segment_revenue
-FROM customer_orders co
-JOIN customers c ON co.customer_id = c.id  -- Link to customer details
-JOIN segments s ON c.segment_id = s.id     -- Get segment name
-GROUP BY s.segment_name
-ORDER BY segment_revenue DESC;
+IMPORTANT: 
+- Keep the existing formatting intact
+- Only ADD comments, don't reformat the SQL structure
+- Return ONLY the annotated SQL, no explanations`;
 
-Return ONLY the formatted and annotated SQL, no additional explanations before or after.`;
-
-      const result = await callOpenAI(systemPrompt, sql);
+      const result = await callOpenAI(systemPrompt, basicFormatted);
       hideLoading();
 
       if (result) {
@@ -4931,8 +5202,17 @@ Return ONLY the formatted and annotated SQL, no additional explanations before o
 
       showLoading('Analyzing query...');
 
-      const schemaContext = getSchemaContextForAI();
       const selectedDialect = AppState.selectedDialect || 'presto';
+      
+      // Get rich schema context for better explanations
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: true, 
+        includeLineage: true,
+        dialect: selectedDialect 
+      });
+      
+      // Get expression patterns for recognizing common patterns
+      const expressionPatterns = getExpressionPatterns();
       
       const systemPrompt = `You are an SQL educator. Explain the provided ${getDialectDisplayName(selectedDialect)} query in ${language}.
 
@@ -4942,6 +5222,14 @@ ${selectedDialect === 'spark' ? 'Note any Spark SQL specific features like LATER
 ${selectedDialect === 'pyspark' ? 'Note any PySpark specific features like DataFrame operations, Column expressions, or Window functions.' : ''}
 
 ${schemaContext !== 'No schema defined yet.' ? `Database Schema Context:\n${schemaContext}\n` : ''}
+
+SCHEMA-AWARE EXPLANATION GUIDANCE:
+- When tables from the schema are used, explain their PURPOSE and GRAIN level
+- When columns are used, explain their SEMANTIC ROLE (dimension vs measure)
+- When aggregations are used, note if they match known patterns from the schema
+- Explain how the query's GROUP BY relates to table grain levels
+- Note any lineage relationships (which source tables feed the results)
+${expressionPatterns !== 'No expression patterns found in schema.' ? `\nKnown expression patterns in this schema:\n${expressionPatterns}` : ''}
 
 Return your response in this JSON format:
 {
@@ -5021,14 +5309,28 @@ Return your response in this JSON format:
       
       showLoading('Translating SQL...');
       
-      const schemaContext = getSchemaContextForAI();
+      // Get rich schema context with expressions rendered in TARGET dialect
+      const schemaContext = getSchemaContextForAI({ 
+        includeExpressions: true, 
+        includeLineage: false,
+        dialect: targetDialect  // Render expressions in target dialect for reference
+      });
+      
+      // Get expression patterns to help with consistent translation
+      const expressionPatterns = getExpressionPatterns();
       
       const systemPrompt = `You are an expert SQL translator specializing in converting queries between different SQL dialects.
 
 SOURCE DIALECT: ${sourceDialect === 'auto' ? 'Auto-detect from the query syntax' : getDialectDisplayName(sourceDialect)}
 TARGET DIALECT: ${getDialectDisplayName(targetDialect)}
 
-${schemaContext !== 'No schema defined yet.' ? `Database Schema (for context):\n${schemaContext}\n` : ''}
+${schemaContext !== 'No schema defined yet.' ? `Database Schema (with expressions in ${targetDialect} syntax for reference):\n${schemaContext}\n` : ''}
+
+SCHEMA-AWARE TRANSLATION:
+- When translating columns that exist in the schema, use their EXPRESSION PATTERNS as templates
+- Columns marked with aggregation types ({SUM}, {COUNT}, etc.) should maintain the same aggregation semantics
+- Respect table grain levels when translating GROUP BY clauses
+${expressionPatterns !== 'No expression patterns found in schema.' ? `\nExpression patterns to follow in ${targetDialect}:\n${expressionPatterns}` : ''}
 
 TRANSLATION GUIDELINES:
 ${targetDialect === 'presto' ? `
@@ -5036,19 +5338,23 @@ ${targetDialect === 'presto' ? `
 - Use CONCAT() instead of || for string concatenation
 - Use DATE_TRUNC() for date truncation
 - Use TRY_CAST() for safe casting
-- Use UNNEST() with CROSS JOIN for array operations` : ''}
+- Use UNNEST() with CROSS JOIN for array operations
+- Use date_diff() for date differences` : ''}
 ${targetDialect === 'spark' ? `
 - Use Spark SQL syntax compatible with AWS EMR
 - Use CONCAT() for string concatenation
 - Use TRUNC() or DATE_TRUNC() for date truncation
 - Use CAST() for type conversion
 - Use LATERAL VIEW EXPLODE() for array operations
+- Use unix_timestamp() for timestamp operations
 - Use Hive-style functions where applicable` : ''}
 ${targetDialect === 'pyspark' ? `
 - Convert to PySpark DataFrame API syntax
 - Use .select(), .filter(), .withColumn(), .groupBy(), .agg()
 - Use F.col(), F.lit(), F.when() from pyspark.sql.functions
 - Use Window functions with Window.partitionBy()
+- Use F.unix_timestamp() for timestamp operations
+- Use F.date_trunc() for date truncation
 - Import: from pyspark.sql import functions as F
 - Import: from pyspark.sql.window import Window` : ''}
 
@@ -6458,9 +6764,10 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
     };
 
     // ==================== ERD INITIALIZATION ====================
-    function initERD() {
+    async function initERD() {
       if (ERDState.erdInitialized) {
         renderERD();
+        updateERDEmptyState();  // Also update empty state on re-render
         return;
       }
 
@@ -6486,8 +6793,8 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         .force('collision', d3.forceCollide().radius(100))
         .on('tick', () => renderERD());
 
-      // Load saved ERD data
-      loadERDData();
+      // Load saved ERD data - MUST await to ensure data is loaded before rendering
+      await loadERDData();
 
       ERDState.erdInitialized = true;
       renderERD();
@@ -7115,6 +7422,7 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       await saveERDData();
       hideAddTableModal();
       renderERD();
+      updateERDEmptyState();
       showToast(editId ? 'Table updated' : 'Table added', 'success');
     }
 
@@ -7128,6 +7436,7 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
 
       await saveERDData();
       renderERD();
+      updateERDEmptyState();
       showToast('Table deleted', 'success');
     }
 
@@ -7142,10 +7451,30 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       document.getElementById('erd-column-desc').value = '';
       document.getElementById('erd-column-pk').checked = false;
       document.getElementById('erd-column-nullable').checked = true;
+      
+      // Clear and collapse business context fields for new column
+      document.getElementById('erd-column-business-def').value = '';
+      document.getElementById('erd-column-examples').value = '';
+      document.getElementById('erd-column-filters').value = '';
+      document.getElementById('col-business-fields').classList.add('view-hidden');
+      document.getElementById('col-business-chevron').style.transform = 'rotate(0deg)';
     }
 
     function hideAddColumnModal() {
       document.getElementById('erd-add-column-modal').classList.add('view-hidden');
+    }
+    
+    function toggleColumnBusinessContext() {
+      const fields = document.getElementById('col-business-fields');
+      const chevron = document.getElementById('col-business-chevron');
+      
+      if (fields.classList.contains('view-hidden')) {
+        fields.classList.remove('view-hidden');
+        chevron.style.transform = 'rotate(180deg)';
+      } else {
+        fields.classList.add('view-hidden');
+        chevron.style.transform = 'rotate(0deg)';
+      }
     }
 
     async function saveERDColumn() {
@@ -7156,6 +7485,14 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       const description = document.getElementById('erd-column-desc').value.trim();
       const primaryKey = document.getElementById('erd-column-pk').checked;
       const nullable = document.getElementById('erd-column-nullable').checked;
+      
+      // Business context fields
+      const businessDef = document.getElementById('erd-column-business-def').value.trim() || null;
+      const examplesStr = document.getElementById('erd-column-examples').value.trim();
+      const filtersStr = document.getElementById('erd-column-filters').value.trim();
+      
+      const exampleValues = examplesStr ? examplesStr.split(',').map(v => v.trim()).filter(v => v) : [];
+      const commonFilters = filtersStr ? filtersStr.split(',').map(f => f.trim()).filter(f => f) : [];
 
       if (!name) {
         showToast('Column name is required', 'warning');
@@ -7174,6 +7511,9 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
           col.description = description;
           col.primaryKey = primaryKey;
           col.nullable = nullable;
+          col.business_definition = businessDef;
+          col.example_values = exampleValues.length > 0 ? exampleValues : undefined;
+          col.common_filters = commonFilters.length > 0 ? commonFilters : undefined;
         }
       } else {
         // Check for duplicate
@@ -7182,7 +7522,12 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
           return;
         }
 
-        table.columns.push({ name, type, description, primaryKey, nullable, foreignKey: null });
+        const newCol = { name, type, description, primaryKey, nullable, foreignKey: null };
+        if (businessDef) newCol.business_definition = businessDef;
+        if (exampleValues.length > 0) newCol.example_values = exampleValues;
+        if (commonFilters.length > 0) newCol.common_filters = commonFilters;
+        
+        table.columns.push(newCol);
       }
 
       await saveERDData();
@@ -7238,6 +7583,7 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       hideClearSchemaModal();
       closeSidePanel();
       renderERD();
+      updateERDEmptyState();
       
       showToast('Schema cleared', 'success');
     }
@@ -7429,6 +7775,7 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       await saveERDData();
       hideERDImportModal();
       renderERD();
+      updateERDEmptyState();
       showToast('Schema imported successfully', 'success');
     }
 
@@ -7886,8 +8233,32 @@ If action is unknown, set message to explain what went wrong.`,
         filtersContainer.innerHTML = '';
       }
 
+      // Populate business context fields
+      document.getElementById('side-panel-business-domain').value = table.business_domain || '';
+      document.getElementById('side-panel-owner').value = table.owner || '';
+      document.getElementById('side-panel-tags').value = table.tags?.join(', ') || '';
+      document.getElementById('side-panel-refresh-frequency').value = table.refresh_frequency || '';
+      document.getElementById('side-panel-quality-notes').value = table.data_quality_notes || '';
+      
+      // Collapse business context by default
+      document.getElementById('business-context-fields').classList.add('view-hidden');
+      document.getElementById('business-context-chevron').style.transform = 'rotate(0deg)';
+
       // Render columns
       renderSidePanelColumns(table);
+    }
+    
+    function toggleBusinessContext() {
+      const fields = document.getElementById('business-context-fields');
+      const chevron = document.getElementById('business-context-chevron');
+      
+      if (fields.classList.contains('view-hidden')) {
+        fields.classList.remove('view-hidden');
+        chevron.style.transform = 'rotate(180deg)';
+      } else {
+        fields.classList.add('view-hidden');
+        chevron.style.transform = 'rotate(0deg)';
+      }
     }
 
     function openRelationshipSidePanel(relId) {
@@ -8048,6 +8419,26 @@ If action is unknown, set message to explain what went wrong.`,
         // Only show actual PK for single-column PKs (not grain columns)
         const showPK = (col.isPK || col.primaryKey) && !isGrainColumn;
         
+        // Usage stats badges
+        let usageStats = '';
+        if (col.usage_stats) {
+          const stats = col.usage_stats;
+          const totalUsage = (stats.times_in_select || 0) + (stats.times_in_join || 0) + 
+                            (stats.times_in_filter || 0) + (stats.times_in_group_by || 0);
+          if (totalUsage > 0) {
+            const badges = [];
+            if (stats.times_in_select > 0) badges.push(`<span class="text-blue-400" title="Used in SELECT ${stats.times_in_select} times">S:${stats.times_in_select}</span>`);
+            if (stats.times_in_join > 0) badges.push(`<span class="text-green-400" title="Used in JOIN ${stats.times_in_join} times">J:${stats.times_in_join}</span>`);
+            if (stats.times_in_filter > 0) badges.push(`<span class="text-orange-400" title="Used in WHERE ${stats.times_in_filter} times">W:${stats.times_in_filter}</span>`);
+            if (stats.times_in_group_by > 0) badges.push(`<span class="text-purple-400" title="Used in GROUP BY ${stats.times_in_group_by} times">G:${stats.times_in_group_by}</span>`);
+            usageStats = `<div class="text-xs flex gap-2 mt-1 opacity-70" title="Usage stats">${badges.join(' ')}</div>`;
+            
+            if (stats.common_aggregations?.length > 0) {
+              usageStats += `<div class="text-xs text-gray-500 mt-0.5">Aggs: ${stats.common_aggregations.join(', ')}</div>`;
+            }
+          }
+        }
+        
         return `
           <div class="bg-surface-light rounded-lg p-2">
             <div class="flex items-center gap-2">
@@ -8066,6 +8457,7 @@ If action is unknown, set message to explain what went wrong.`,
                 ${expressionInfo}
                 ${renderingsInfo}
                 ${inferredInfo}
+                ${usageStats}
               </div>
               <button onclick="editColumnInSidePanel(${i})" class="p-1 hover:bg-surface-lighter rounded transition-colors">
                 <span class="material-symbols-outlined text-xs">edit</span>
@@ -8100,6 +8492,21 @@ If action is unknown, set message to explain what went wrong.`,
       document.getElementById('erd-column-desc').value = col.description || '';
       document.getElementById('erd-column-pk').checked = col.primaryKey || false;
       document.getElementById('erd-column-nullable').checked = col.nullable !== false;
+      
+      // Populate business context fields
+      document.getElementById('erd-column-business-def').value = col.business_definition || '';
+      document.getElementById('erd-column-examples').value = col.example_values?.join(', ') || '';
+      document.getElementById('erd-column-filters').value = col.common_filters?.join(', ') || '';
+      
+      // Collapse business context by default, unless there's data
+      const hasBusinessData = col.business_definition || col.example_values?.length || col.common_filters?.length;
+      if (hasBusinessData) {
+        document.getElementById('col-business-fields').classList.remove('view-hidden');
+        document.getElementById('col-business-chevron').style.transform = 'rotate(180deg)';
+      } else {
+        document.getElementById('col-business-fields').classList.add('view-hidden');
+        document.getElementById('col-business-chevron').style.transform = 'rotate(0deg)';
+      }
     }
 
     async function deleteColumnInSidePanel(colIndex) {
@@ -8140,6 +8547,19 @@ If action is unknown, set message to explain what went wrong.`,
       table.name = newName;
       table.tableType = newType;
       table.description = newDesc;
+      
+      // Save business context fields
+      const businessDomain = document.getElementById('side-panel-business-domain').value || null;
+      const owner = document.getElementById('side-panel-owner').value.trim() || null;
+      const tagsStr = document.getElementById('side-panel-tags').value.trim();
+      const refreshFrequency = document.getElementById('side-panel-refresh-frequency').value || null;
+      const qualityNotes = document.getElementById('side-panel-quality-notes').value.trim() || null;
+      
+      table.business_domain = businessDomain;
+      table.owner = owner;
+      table.tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [];
+      table.refresh_frequency = refreshFrequency;
+      table.data_quality_notes = qualityNotes;
 
       await saveERDData();
       renderERD();
@@ -8164,6 +8584,7 @@ If action is unknown, set message to explain what went wrong.`,
       await saveERDData();
       closeSidePanel();
       renderERD();
+      updateERDEmptyState();
       showToast('Table deleted', 'success');
     }
 
@@ -8192,58 +8613,535 @@ If action is unknown, set message to explain what went wrong.`,
     }
 
     // ==================== SCHEMA CONTEXT FOR AI ====================
-    function getSchemaContextForAI() {
+    /**
+     * Get rich schema context for AI functions
+     * This is the CRITICAL function that passes metadata to AI - must include all available context
+     * @param {Object} options - Options for context generation
+     * @param {boolean} options.includeExpressions - Include SQL expressions for computed columns
+     * @param {boolean} options.includeLineage - Include data lineage information
+     * @param {string} options.dialect - SQL dialect for expression rendering (presto|spark|pyspark)
+     * @param {boolean} options.compact - Use compact format for smaller context
+     */
+    function getSchemaContextForAI(options = {}) {
+      const { 
+        includeExpressions = true, 
+        includeLineage = true, 
+        dialect = AppState.selectedDialect || 'presto',
+        compact = false
+      } = options;
+      
       if (ERDState.tables.length === 0) return 'No schema defined yet.';
 
-      let context = 'DATABASE SCHEMA:\n\n';
+      let context = `DATABASE SCHEMA (${ERDState.tables.length} tables)\n\n`;
+      
+      // Group tables by data layer for clarity
+      const layerOrder = ['gold', 'diamond', 'black', 'prediction', 'silver', 'raw', null];
+      const tablesByLayer = {};
       
       ERDState.tables.forEach(t => {
-        const tableType = t.tableType ? ` [${t.tableType.toUpperCase()}]` : '';
-        context += `TABLE: ${t.name}${tableType}\n`;
+        const layer = t.tableType || 'raw';
+        if (!tablesByLayer[layer]) tablesByLayer[layer] = [];
+        tablesByLayer[layer].push(t);
+      });
+      
+      layerOrder.forEach(layer => {
+        const tables = tablesByLayer[layer];
+        if (!tables || tables.length === 0) return;
         
-        if (t.description) {
-          context += `  Description: ${t.description}\n`;
-        }
+        const layerName = layer ? layer.toUpperCase() : 'UNCLASSIFIED';
+        context += `=== ${layerName} LAYER ===\n\n`;
         
-        context += '  Columns:\n';
-        t.columns.forEach(c => {
-          let colInfo = `    - ${c.name} (${c.type || 'UNKNOWN'}`;
-          if (c.primaryKey) colInfo += ', PRIMARY KEY';
-          if (c.foreignKey) colInfo += `, FK→${c.foreignKey}`;
-          colInfo += ')';
+        tables.forEach(t => {
+          context += `TABLE: ${t.name}\n`;
           
-          if (c.description) {
-            colInfo += ` -- ${c.description}`;
+          // Include table description/purpose
+          if (t.description) {
+            context += `  Purpose: ${t.description}\n`;
           }
-          context += colInfo + '\n';
+          
+          // CRITICAL: Include grain for aggregated tables - tells AI the granularity level
+          if (t.is_aggregated && t.grain_columns?.length) {
+            context += `  Grain: ${t.grain_columns.join(', ')} (aggregated at this level)\n`;
+          } else if (t.grain_columns?.length) {
+            context += `  Key: ${t.grain_columns.join(', ')}\n`;
+          }
+          
+          // CRITICAL: Include filters that define this table's scope
+          if (t.filters_normalized?.length) {
+            context += `  Filters: ${t.filters_normalized.join('; ')}\n`;
+          }
+          
+          // Include business domain and tags if available
+          if (t.business_domain) {
+            context += `  Domain: ${t.business_domain}\n`;
+          }
+          if (t.tags?.length) {
+            context += `  Tags: ${t.tags.join(', ')}\n`;
+          }
+          
+          context += '  Columns:\n';
+          t.columns.forEach(c => {
+            let line = `    - ${c.name} (${c.type || 'UNKNOWN'})`;
+            
+            // CRITICAL: Include semantic role - dimension vs measure vs key
+            if (c.semantic_role) {
+              line += ` [${c.semantic_role}]`;
+            }
+            
+            // Mark grain/key columns
+            if (c.is_grain || c.isPK) {
+              line += ' [KEY]';
+            }
+            
+            // CRITICAL: Include aggregation type for measures
+            if (c.aggregation_type && c.aggregation_type !== 'none') {
+              line += ` {${c.aggregation_type.toUpperCase()}}`;
+            }
+            
+            // CRITICAL: Include computation expression from IR (dialect-specific)
+            if (includeExpressions && c.expression_ir) {
+              try {
+                const sql = renderExpressionForDialect(c.expression_ir, dialect);
+                if (sql && sql !== c.name) {
+                  line += compact ? ` = ${sql}` : `\n      Expression: ${sql}`;
+                }
+              } catch (e) {
+                // Fallback to original expression if IR rendering fails
+                if (c.expression_sql_original) {
+                  line += compact ? ` = ${c.expression_sql_original}` : `\n      Expression: ${c.expression_sql_original}`;
+                }
+              }
+            }
+            
+            // CRITICAL: Include source columns for understanding lineage
+            if (c.source_columns?.length) {
+              line += compact 
+                ? ` [from: ${c.source_columns.join(', ')}]`
+                : `\n      Sources: ${c.source_columns.join(', ')}`;
+            }
+            
+            // Include column description
+            if (c.description) {
+              line += ` -- ${c.description}`;
+            }
+            
+            // Include business definition if available
+            if (c.business_definition && c.business_definition !== c.description) {
+              line += `\n      Definition: ${c.business_definition}`;
+            }
+            
+            // Include example values for dimension columns
+            if (c.example_values?.length && !compact) {
+              line += `\n      Examples: ${c.example_values.slice(0, 5).join(', ')}`;
+            }
+            
+            // Include common filters for this column
+            if (c.common_filters?.length && !compact) {
+              line += `\n      Common filters: ${c.common_filters.join('; ')}`;
+            }
+            
+            context += line + '\n';
+          });
+          
+          context += '\n';
         });
-        context += '\n';
       });
 
-      if (ERDState.relationships.length > 0) {
-        // Separate FK relationships from lineage
-        const fkRels = ERDState.relationships.filter(r => r.type !== 'lineage');
+      // Include relationship context for joins and lineage
+      if (includeLineage && ERDState.relationships.length > 0) {
+        const joinRels = ERDState.relationships.filter(r => r.type !== 'lineage');
         const lineageRels = ERDState.relationships.filter(r => r.type === 'lineage');
         
-        if (fkRels.length > 0) {
-          context += 'RELATIONSHIPS (FK/Joins):\n';
-          fkRels.forEach(r => {
+        if (joinRels.length > 0) {
+          context += '=== JOIN PATHS ===\n';
+          joinRels.forEach(r => {
             const fromStr = r.from.column ? `${r.from.table}.${r.from.column}` : r.from.table;
             const toStr = r.to.column ? `${r.to.table}.${r.to.column}` : r.to.table;
-            const typeLabel = r.type === 'join_condition' ? 'join' : r.type;
-            context += `  - ${fromStr} → ${toStr} (${typeLabel})\n`;
+            const joinType = r.join_type || 'JOIN';
+            context += `  ${fromStr} ${joinType} ${toStr}`;
+            if (r.on_sql) {
+              context += ` ON ${r.on_sql}`;
+            }
+            context += '\n';
           });
+          context += '\n';
         }
         
         if (lineageRels.length > 0) {
-          context += '\nDATA LINEAGE (depends on):\n';
+          context += '=== DATA LINEAGE ===\n';
           lineageRels.forEach(r => {
-            context += `  - ${r.from.table} depends on ${r.to.table}\n`;
+            context += `  ${r.from.table} depends on ${r.to.table}`;
+            if (r.source_filters?.length) {
+              context += ` (filters: ${r.source_filters.join('; ')})`;
+            }
+            context += '\n';
           });
+          context += '\n';
         }
       }
 
       return context;
+    }
+    
+    /**
+     * Get expression patterns from schema for AI prompt guidance
+     * Returns common aggregation and calculation patterns found in existing schema
+     */
+    function getExpressionPatterns() {
+      const patterns = {
+        aggregations: {},
+        calculations: []
+      };
+      
+      ERDState.tables.forEach(t => {
+        t.columns.forEach(c => {
+          // Track aggregation types used
+          if (c.aggregation_type && c.aggregation_type !== 'none') {
+            if (!patterns.aggregations[c.aggregation_type]) {
+              patterns.aggregations[c.aggregation_type] = [];
+            }
+            patterns.aggregations[c.aggregation_type].push(`${t.name}.${c.name}`);
+          }
+          
+          // Track expression patterns
+          if (c.expression_ir) {
+            const sql = renderExpressionForDialect(c.expression_ir, 'presto');
+            if (sql && sql.length < 100) {  // Only include reasonably sized expressions
+              patterns.calculations.push({
+                column: `${t.name}.${c.name}`,
+                expression: sql,
+                type: c.aggregation_type
+              });
+            }
+          }
+        });
+      });
+      
+      // Format for AI prompt
+      let result = '';
+      
+      // Show aggregation types used
+      const aggTypes = Object.keys(patterns.aggregations);
+      if (aggTypes.length > 0) {
+        result += 'Aggregation types in schema: ' + aggTypes.map(t => t.toUpperCase()).join(', ') + '\n';
+      }
+      
+      // Show sample calculations (limit to 10 most recent)
+      if (patterns.calculations.length > 0) {
+        result += 'Example expressions:\n';
+        patterns.calculations.slice(-10).forEach(p => {
+          result += `  ${p.column} = ${p.expression}\n`;
+        });
+      }
+      
+      return result || 'No expression patterns found in schema.';
+    }
+    
+    /**
+     * Get efficient join paths from schema for AI guidance
+     */
+    function getJoinPaths() {
+      const joinRels = ERDState.relationships.filter(r => r.type !== 'lineage');
+      if (joinRels.length === 0) return 'No join relationships defined in schema.';
+      
+      let result = '';
+      joinRels.forEach(r => {
+        const fromStr = r.from.column ? `${r.from.table}.${r.from.column}` : r.from.table;
+        const toStr = r.to.column ? `${r.to.table}.${r.to.column}` : r.to.table;
+        const joinType = r.join_type || 'JOIN';
+        result += `${fromStr} ${joinType} ${toStr}`;
+        if (r.on_sql) {
+          result += ` ON ${r.on_sql}`;
+        }
+        result += '\n';
+      });
+      
+      return result;
+    }
+    
+    /**
+     * Get key/grain columns for optimization hints
+     */
+    function getKeyColumns() {
+      const keys = [];
+      
+      ERDState.tables.forEach(t => {
+        // Table-level grain columns
+        if (t.grain_columns?.length) {
+          keys.push(`${t.name}: ${t.grain_columns.join(', ')}`);
+        } else {
+          // Column-level keys
+          const keyColumns = t.columns.filter(c => c.is_grain || c.isPK);
+          if (keyColumns.length > 0) {
+            keys.push(`${t.name}: ${keyColumns.map(c => c.name).join(', ')}`);
+          }
+        }
+      });
+      
+      return keys.length > 0 
+        ? keys.join('\n') 
+        : 'No key columns explicitly defined in schema.';
+    }
+    
+    /**
+     * Get efficient join patterns for optimization
+     */
+    function getEfficientJoins() {
+      // For now, return all defined joins - these are "known good" patterns
+      // In future, could track query performance to identify truly efficient joins
+      return getJoinPaths();
+    }
+    
+    /**
+     * Validate SQL locally without AI - performs fast client-side checks
+     * @param {string} sql - The SQL query to validate
+     * @param {string} dialect - SQL dialect
+     * @returns {Array} Array of validation issues
+     */
+    function validateSQLLocally(sql, dialect = 'presto') {
+      const issues = [];
+      if (!sql || !sql.trim()) return issues;
+      
+      const sqlUpper = sql.toUpperCase();
+      const sqlLower = sql.toLowerCase();
+      
+      // 1. Extract and check table references
+      const tableRefs = extractTableReferences(sql);
+      tableRefs.forEach(ref => {
+        const tableName = ref.split('.').pop();  // Handle schema.table format
+        if (!ERDState.tables.find(t => 
+          t.name.toLowerCase() === ref.toLowerCase() || 
+          t.name.toLowerCase().endsWith('.' + tableName.toLowerCase())
+        )) {
+          // Don't flag CTEs as unknown tables
+          const ctePattern = new RegExp(`\\bWITH\\s+${ref}\\s+AS\\b`, 'i');
+          if (!ctePattern.test(sql)) {
+            issues.push({ 
+              severity: 'warning', 
+              message: `Unknown table: ${ref}`,
+              suggestion: 'Verify table name exists in schema or add it to ERD'
+            });
+          }
+        }
+      });
+      
+      // 2. Check for common SQL mistakes
+      if (sqlUpper.includes('SELECT *') && ERDState.tables.length > 0) {
+        issues.push({
+          severity: 'info',
+          message: 'Using SELECT * - consider specifying columns for better performance',
+          suggestion: 'List specific columns instead of *'
+        });
+      }
+      
+      // 3. Check for grain/aggregation violations
+      const hasGroupBy = sqlUpper.includes('GROUP BY');
+      const hasAggregation = /\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(sql);
+      
+      if (hasAggregation && !hasGroupBy) {
+        // Check if it's a simple aggregate without non-aggregated columns
+        const selectMatch = sql.match(/SELECT\s+([\s\S]*?)\s+FROM/i);
+        if (selectMatch) {
+          const selectList = selectMatch[1];
+          // If there are non-aggregated columns, warn
+          const columns = selectList.split(',').map(c => c.trim());
+          const nonAggColumns = columns.filter(c => !/\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(c) && !/^\d+$/.test(c) && !/^['"]/.test(c));
+          if (nonAggColumns.length > 0) {
+            issues.push({
+              severity: 'warning',
+              message: 'Aggregation without GROUP BY may produce unexpected results',
+              suggestion: 'Add GROUP BY clause or wrap non-aggregated columns in aggregation'
+            });
+          }
+        }
+      }
+      
+      // 4. Dialect-specific checks
+      if (dialect === 'presto') {
+        if (sqlUpper.includes('ISNULL(')) {
+          issues.push({
+            severity: 'error',
+            message: 'ISNULL() is not supported in Presto',
+            suggestion: 'Use COALESCE() or NULLIF() instead'
+          });
+        }
+        if (/DATEADD\s*\(/i.test(sql)) {
+          issues.push({
+            severity: 'error',
+            message: 'DATEADD() is not supported in Presto',
+            suggestion: 'Use date_add() or interval arithmetic'
+          });
+        }
+      }
+      
+      if (dialect === 'spark') {
+        if (/NVL2\s*\(/i.test(sql)) {
+          issues.push({
+            severity: 'warning',
+            message: 'NVL2() may not be available in all Spark versions',
+            suggestion: 'Consider using CASE WHEN or IF() instead'
+          });
+        }
+      }
+      
+      // 5. Check for potentially slow patterns
+      if (/\bLIKE\s+'%[^%]/i.test(sql)) {
+        issues.push({
+          severity: 'info',
+          message: 'Leading wildcard in LIKE pattern prevents index usage',
+          suggestion: 'Consider alternative filtering approaches if performance is critical'
+        });
+      }
+      
+      if (/\bDISTINCT\b/i.test(sql) && /\bORDER BY\b/i.test(sql)) {
+        issues.push({
+          severity: 'info',
+          message: 'DISTINCT with ORDER BY can be expensive',
+          suggestion: 'Consider using GROUP BY instead if applicable'
+        });
+      }
+      
+      return issues;
+    }
+    
+    /**
+     * Extract table references from SQL
+     */
+    function extractTableReferences(sql) {
+      const tables = new Set();
+      
+      // Match FROM and JOIN clauses
+      const patterns = [
+        /\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)/gi,
+        /\bJOIN\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)/gi
+      ];
+      
+      patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(sql)) !== null) {
+          const tableName = match[1];
+          // Exclude SQL keywords that might match
+          if (!['SELECT', 'WHERE', 'AND', 'OR', 'ON', 'SET', 'VALUES'].includes(tableName.toUpperCase())) {
+            tables.add(tableName);
+          }
+        }
+      });
+      
+      return Array.from(tables);
+    }
+    
+    /**
+     * Update column usage statistics based on SQL query analysis
+     * Tracks how columns are used: in SELECT, JOIN, WHERE, GROUP BY
+     * @param {string} sql - The SQL query to analyze
+     */
+    function updateColumnUsageStats(sql) {
+      if (!sql || ERDState.tables.length === 0) return;
+      
+      const sqlUpper = sql.toUpperCase();
+      
+      // Extract different sections of the query
+      const selectMatch = sql.match(/SELECT\s+([\s\S]*?)\s+FROM/i);
+      const fromJoinMatch = sql.match(/FROM\s+([\s\S]*?)(?:WHERE|GROUP|ORDER|HAVING|LIMIT|$)/i);
+      const whereMatch = sql.match(/WHERE\s+([\s\S]*?)(?:GROUP|ORDER|HAVING|LIMIT|$)/i);
+      const groupMatch = sql.match(/GROUP\s+BY\s+([\s\S]*?)(?:HAVING|ORDER|LIMIT|$)/i);
+      
+      const selectClause = selectMatch ? selectMatch[1] : '';
+      const fromClause = fromJoinMatch ? fromJoinMatch[1] : '';
+      const whereClause = whereMatch ? whereMatch[1] : '';
+      const groupClause = groupMatch ? groupMatch[1] : '';
+      
+      // Extract aggregation functions used
+      const aggregations = [];
+      const aggMatches = sql.matchAll(/\b(COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT)\s*\(/gi);
+      for (const match of aggMatches) {
+        aggregations.push(match[1].toUpperCase());
+      }
+      
+      // Update stats for each column in the schema
+      ERDState.tables.forEach(table => {
+        const tableName = table.name.split('.').pop().toLowerCase();  // Handle schema.table format
+        const tableInQuery = sqlUpper.includes(tableName.toUpperCase());
+        
+        if (!tableInQuery) return;
+        
+        table.columns.forEach(col => {
+          const colName = col.name.toLowerCase();
+          const colPattern = new RegExp(`\\b${colName}\\b`, 'gi');
+          
+          // Initialize usage_stats if not exists
+          if (!col.usage_stats) {
+            col.usage_stats = {
+              times_in_select: 0,
+              times_in_join: 0,
+              times_in_filter: 0,
+              times_in_group_by: 0,
+              common_aggregations: []
+            };
+          }
+          
+          // Check if column is in SELECT clause
+          if (colPattern.test(selectClause)) {
+            col.usage_stats.times_in_select++;
+            
+            // Track aggregations applied to this column
+            aggregations.forEach(agg => {
+              const aggPattern = new RegExp(`${agg}\\s*\\([^)]*\\b${colName}\\b`, 'i');
+              if (aggPattern.test(sql)) {
+                if (!col.usage_stats.common_aggregations.includes(agg)) {
+                  col.usage_stats.common_aggregations.push(agg);
+                }
+              }
+            });
+          }
+          
+          // Check if column is in JOIN condition
+          const joinPattern = new RegExp(`JOIN[^]*?ON[^]*?\\b${colName}\\b`, 'i');
+          if (joinPattern.test(fromClause)) {
+            col.usage_stats.times_in_join++;
+          }
+          
+          // Check if column is in WHERE clause
+          if (colPattern.test(whereClause)) {
+            col.usage_stats.times_in_filter++;
+          }
+          
+          // Check if column is in GROUP BY clause
+          if (colPattern.test(groupClause)) {
+            col.usage_stats.times_in_group_by++;
+          }
+        });
+      });
+      
+      // Save updated stats
+      saveERDData();
+    }
+    
+    /**
+     * Infer expression return type based on function and operand types
+     */
+    function inferExpressionType(expression, dialect = 'presto') {
+      if (!expression) return null;
+      
+      const exprUpper = expression.toUpperCase();
+      
+      // Aggregation functions
+      if (/\bCOUNT\s*\(/i.test(exprUpper)) return 'BIGINT';
+      if (/\bSUM\s*\(/i.test(exprUpper)) return 'DECIMAL';  // Conservative
+      if (/\bAVG\s*\(/i.test(exprUpper)) return 'DOUBLE';
+      if (/\bMIN\s*\(|MAX\s*\(/i.test(exprUpper)) return null;  // Depends on input
+      
+      // String functions
+      if (/\bCONCAT\s*\(|\bSUBSTRING\s*\(|\bUPPER\s*\(|\bLOWER\s*\(/i.test(exprUpper)) return 'VARCHAR';
+      
+      // Date functions
+      if (/\bDATE_TRUNC\s*\(|\bDATE_ADD\s*\(|\bCURRENT_DATE\b/i.test(exprUpper)) return 'DATE';
+      if (/\bCURRENT_TIMESTAMP\b|\bNOW\s*\(/i.test(exprUpper)) return 'TIMESTAMP';
+      
+      // Boolean
+      if (/\bCASE\s+WHEN\b.*\bTHEN\s+(TRUE|FALSE)\b/i.test(exprUpper)) return 'BOOLEAN';
+      
+      return null;
     }
 
     // ==================== SCHEMA DETECTION FROM QUERIES ====================
@@ -8348,6 +9246,7 @@ Infer column types from context. Identify JOINs as relationships.`;
 
       await saveERDData();
       hideSchemaDetectModal();
+      updateERDEmptyState();
       
       if (AppState.currentMode === 'erd') {
         renderERD();
@@ -9124,13 +10023,21 @@ Infer column types from context. Identify JOINs as relationships.`;
      * Strip schema data for Lite mode - removes redundant/inferrable fields
      * This reduces JSON size by 70-80% while keeping all info needed for SQL generation
      */
+    /**
+     * Strip schema for Lite mode export - aligned with plan Part 6
+     * Removes redundant fields:
+     * - unique_key, primary_key (replaced by grain_columns)
+     * - expression_sql, expression_sql_normalized, renderings (use expression_ir)
+     * - compatible_grains, requires_group_by (derivable from context)
+     * - x, y, vx, vy, index (layout only)
+     */
     function stripSchemaForLiteMode(schema) {
       const mode = getSchemaMode();
       if (mode !== 'lite') return schema;
       
       const stripped = {
         tables: schema.tables.map(table => {
-          // Base table fields (always kept)
+          // Core table fields per plan Part 6.1
           const strippedTable = {
             id: table.id,
             name: table.name,
@@ -9138,39 +10045,33 @@ Infer column types from context. Identify JOINs as relationships.`;
             schema_source: table.schema_source,
             is_stub: table.is_stub,
             is_aggregated: table.is_aggregated,
-            grain_columns: table.grain_columns,
-            unique_key: table.unique_key
+            // grain_columns IS the composite key - no need for unique_key/primary_key
+            grain_columns: table.grain_columns || []
           };
           
-          // Strip layout/physics fields (x, y, vx, vy, index) - not needed for SQL generation
-          // These are only used for ERD visual rendering
-          
-          // In full mode, keep primary_key and filters
-          if (mode === 'full' || table.primary_key?.length) {
-            strippedTable.primary_key = table.primary_key;
-          }
+          // Keep filters_normalized (the clean, usable version)
           if (table.filters_normalized?.length) {
             strippedTable.filters_normalized = table.filters_normalized;
           }
           
-          // Strip columns
+          // Strip columns per plan Part 6.2
           strippedTable.columns = (table.columns || []).map(col => {
-            // Lite column: only essential fields for SQL generation
+            // Core column fields for SQL generation
             const strippedCol = {
               name: col.name,
               type: col.type,
               semantic_role: col.semantic_role,
               aggregation_type: col.aggregation_type,
-              nullable: col.nullable,
-              is_grain: col.is_grain
+              is_grain: col.is_grain,
+              nullable: col.nullable
             };
             
-            // Keep expression_ir as source of truth (don't keep SQL variants or renderings)
+            // expression_ir is source of truth (generates SQL on-demand via renderExpressionForDialect)
             if (col.expression_ir) {
               strippedCol.expression_ir = col.expression_ir;
             }
             
-            // Keep source_columns for lineage
+            // Keep source_columns for lineage understanding
             if (col.source_columns?.length) {
               strippedCol.source_columns = col.source_columns;
             }
@@ -9180,8 +10081,8 @@ Infer column types from context. Identify JOINs as relationships.`;
           
           return strippedTable;
         }),
+        // Relationships per plan Part 6.3
         relationships: schema.relationships.map(rel => {
-          // Essential relationship fields
           const strippedRel = {
             id: rel.id,
             from: rel.from,
@@ -9189,13 +10090,13 @@ Infer column types from context. Identify JOINs as relationships.`;
             type: rel.type
           };
           
-          // For joins, keep essential join metadata
+          // For join relationships, keep join metadata
           if (rel.type === 'join') {
             strippedRel.join_type = rel.join_type;
             if (rel.on_sql) strippedRel.on_sql = rel.on_sql;
           }
           
-          // For lineage, keep source_filters if present
+          // For lineage, keep source_filters
           if (rel.type === 'lineage' && rel.source_filters?.length) {
             strippedRel.source_filters = rel.source_filters;
           }
@@ -9326,20 +10227,13 @@ Infer column types from context. Identify JOINs as relationships.`;
         const name = table.name || '';
         // Real tables have schema.table format (contain a dot)
         if (name.includes('.')) return true;
-        // If no dot and short name (<=3 chars), likely a CTE alias - remove it
-        if (name.length <= 3) {
-          console.warn(`Filtering out CTE alias: ${name}`);
-          return false;
-        }
-        // Longer names without dots might be valid unqualified tables - keep with warning
-        console.warn(`Keeping unqualified table name: ${name} (might be CTE)`);
+        // If no dot and short name (<=3 chars), likely a CTE alias - filter it
+        if (name.length <= 3) return false;
+        // Longer names without dots might be valid unqualified tables - keep them
         return true;
       });
-      if (result.tables.length < originalCount) {
-        console.log(`Filtered ${originalCount - result.tables.length} CTE aliases from schema`);
-      }
       
-      // Also filter relationships that reference CTE aliases
+      // Filter relationships that reference CTE aliases
       const validTableNames = new Set(result.tables.map(t => t.name.toLowerCase()));
       result.relationships = result.relationships.filter(rel => {
         const fromTable = rel.from?.table?.toLowerCase() || '';
@@ -9347,11 +10241,7 @@ Infer column types from context. Identify JOINs as relationships.`;
         // For lineage/join, check if tables are valid (have dots or are in our valid set)
         const fromValid = fromTable.includes('.') || validTableNames.has(fromTable);
         const toValid = toTable.includes('.') || validTableNames.has(toTable);
-        if (!fromValid || !toValid) {
-          console.warn(`Filtering relationship with CTE reference: ${fromTable} -> ${toTable}`);
-          return false;
-        }
-        return true;
+        return fromValid && toValid;
       });
       
       // 1. Ensure Node Closure - create stub tables for all referenced tables
@@ -9402,8 +10292,7 @@ Infer column types from context. Identify JOINs as relationships.`;
           const toTableExists = tableMap.has(rel.to.table.toLowerCase());
           
           if (!fromTableExists || !toTableExists) {
-            console.warn(`Removing invalid relationship: tables not found`);
-            return false;
+            return false;  // Invalid relationship - tables not found
           }
         }
         
@@ -9447,9 +10336,8 @@ Infer column types from context. Identify JOINs as relationships.`;
         const forwardKey = `${rel.type}:${fromTable}.${fromCol}:${toTable}.${toCol}`;
         const reverseKey = `${rel.type}:${toTable}.${toCol}:${fromTable}.${fromCol}`;
         
-        // If we've seen either direction, skip this one
+        // If we've seen either direction, skip this duplicate
         if (seenRelationships.has(forwardKey) || seenRelationships.has(reverseKey)) {
-          console.warn(`Removing duplicate relationship: ${forwardKey}`);
           return false;
         }
         
@@ -9738,8 +10626,6 @@ Infer column types from context. Identify JOINs as relationships.`;
           }
           
           result.tables.push(stubTable);
-          
-          console.log(`Created stub table: ${originalName} with ${stubColumns.length} inferred columns`);
         }
       });
       
@@ -10228,55 +11114,82 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
         
         // Get edited column descriptions and preserve metadata based on schema mode
         const isLiteMode = getSchemaMode() === 'lite';
+        
+        /**
+         * Column schema (aligned with plan Part 6.2):
+         * - Keep: id, name, type, semantic_role, aggregation_type, is_grain, 
+         *         expression_ir (source of truth), expression_sql_original (for debugging),
+         *         source_columns, nullable, description (full mode)
+         * - Removed: expression_sql, expression_sql_normalized, renderings (generate from IR on-demand)
+         *           compatible_grains (equals parent's grain_columns), requires_group_by (implicit)
+         */
         const columnsWithDescriptions = (table.columns || []).map((col, ci) => {
           const colDescInput = document.querySelector(`[data-process-col-desc="${idx}-${ci}"]`);
           const colKey = `${table.name.toLowerCase()}.${col.name.toLowerCase()}`;
           
-          // Lite mode: minimal fields for SQL generation
-          if (isLiteMode) {
-            return {
-              id: col.id || `col_${stableHash(colKey)}`,
-              name: col.name,
-              type: col.type || 'VARCHAR',
-              semantic_role: col.semantic_role,
-              aggregation_type: col.aggregation_type,
-              expression_ir: col.expression_ir,
-              source_columns: col.source_columns,
-              is_grain: col.is_grain || false,
-              nullable: col.nullable !== undefined ? col.nullable : null
-            };
-          }
-          
-          // Full mode: preserve all metadata
-          return {
+          // Core column fields (both modes)
+          const cleanColumn = {
             id: col.id || `col_${stableHash(colKey)}`,
             name: col.name,
             type: col.type || 'VARCHAR',
-            description: colDescInput?.value || col.description || '',
             semantic_role: col.semantic_role,
             aggregation_type: col.aggregation_type,
-            // Expression fields - multi-dialect support
-            expression_sql_original: col.expression_sql_original || col.expression_sql,
-            expression_sql_normalized: col.expression_sql_normalized,
-            expression_ir: col.expression_ir,
-            renderings: col.renderings,
-            // Legacy field for backward compatibility
-            expression_sql: col.expression_sql_normalized || col.expression_sql,
-            // Source tracking
-            source_columns: col.source_columns,
-            via_steps: col.via_steps,
-            // Key modeling
             is_grain: col.is_grain || false,
-            compatible_grains: col.compatible_grains,
-            requires_group_by: col.requires_group_by,
-            // Metadata
-            inferred_from_query: col.inferred_from_query || false,
-            type_confidence: col.type_confidence,
-            inferred_from: col.inferred_from,
-            isPK: col.isPK || false,
-            isFK: col.isFK || false,
             nullable: col.nullable !== undefined ? col.nullable : null
           };
+          
+          // Expression fields - expression_ir is source of truth
+          if (col.expression_ir) {
+            cleanColumn.expression_ir = col.expression_ir;
+          }
+          // Keep original expression for debugging/display only
+          if (col.expression_sql_original || col.expression_sql) {
+            cleanColumn.expression_sql_original = col.expression_sql_original || col.expression_sql;
+          }
+          
+          // Source tracking for lineage
+          if (col.source_columns?.length) {
+            cleanColumn.source_columns = col.source_columns;
+          }
+          
+          // Full mode: add documentation fields
+          if (!isLiteMode) {
+            cleanColumn.description = colDescInput?.value || col.description || '';
+            
+            // Business context fields (Part 2.1 of plan)
+            if (col.business_definition) {
+              cleanColumn.business_definition = col.business_definition;
+            }
+            if (col.example_values?.length) {
+              cleanColumn.example_values = col.example_values;
+            }
+            if (col.valid_range) {
+              cleanColumn.valid_range = col.valid_range;
+            }
+            if (col.common_filters?.length) {
+              cleanColumn.common_filters = col.common_filters;
+            }
+            if (col.related_columns?.length) {
+              cleanColumn.related_columns = col.related_columns;
+            }
+            
+            // Legacy metadata (for backward compatibility during transition)
+            if (col.inferred_from_query) {
+              cleanColumn.inferred_from_query = col.inferred_from_query;
+            }
+            if (col.type_confidence) {
+              cleanColumn.type_confidence = col.type_confidence;
+            }
+            // Keep isPK only for source tables with single-column PKs
+            if (col.isPK && !table.is_aggregated) {
+              cleanColumn.isPK = col.isPK;
+            }
+            if (col.isFK) {
+              cleanColumn.isFK = col.isFK;
+            }
+          }
+          
+          return cleanColumn;
         });
         
         // Check if table already exists
@@ -10304,8 +11217,13 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
           // Update table type if provided
           if (tableType) existing.tableType = tableType;
         } else {
-          // Add new table with descriptions (using stable hash-based ID)
-          // Layout fields (x, y) are for ERD rendering only, always included
+          /**
+           * Table schema (aligned with plan Part 6.1):
+           * - Keep: id, name, tableType, schema_source, is_stub, is_aggregated, grain_columns,
+           *         filters_normalized, description (full mode), business_domain, tags
+           * - Removed: unique_key, primary_key (use grain_columns), filters_original/filters (redundant)
+           * - Layout (x, y) is for ERD rendering only, not exported
+           */
           const newTable = {
             id: `table_${stableHash(table.name.toLowerCase())}`,
             name: table.name,
@@ -10313,25 +11231,38 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
             schema_source: table.schema_source || (table.is_stub ? 'query_inferred' : 'ctas_output'),
             is_stub: table.is_stub || false,
             is_aggregated: table.is_aggregated || false,
+            // grain_columns IS the composite key for aggregated tables
             grain_columns: table.grain_columns || [],
-            unique_key: table.unique_key || [],
-            // Layout for ERD visualization (not exported in lite mode)
+            // Layout for ERD visualization only
             x: 100 + (ERDState.tables.length % 4) * 250,
             y: 100 + Math.floor(ERDState.tables.length / 4) * 200,
             columns: columnsWithDescriptions
           };
           
-          // Full mode: add additional metadata
+          // Keep filters_normalized (the clean version)
+          if (table.filters_normalized?.length) {
+            newTable.filters_normalized = table.filters_normalized;
+          }
+          
+          // Full mode: add documentation and business context fields
           if (!isLiteMode) {
             newTable.description = tableDescription;
-            newTable.primary_key = table.primary_key || table.grain_columns || [];
-            newTable.filters_original = table.filters_original || table.filters || [];
-            newTable.filters_normalized = table.filters_normalized || [];
-            newTable.filters = table.filters || [];
-          } else {
-            // Lite mode: only keep normalized filters if present
-            if (table.filters_normalized?.length) {
-              newTable.filters_normalized = table.filters_normalized;
+            
+            // Business context fields (Part 2.1 of plan)
+            if (table.business_domain) {
+              newTable.business_domain = table.business_domain;
+            }
+            if (table.owner) {
+              newTable.owner = table.owner;
+            }
+            if (table.data_quality_notes) {
+              newTable.data_quality_notes = table.data_quality_notes;
+            }
+            if (table.refresh_frequency) {
+              newTable.refresh_frequency = table.refresh_frequency;
+            }
+            if (table.tags?.length) {
+              newTable.tags = table.tags;
             }
           }
           
@@ -10404,6 +11335,7 @@ raw=source, gold=KPI/aggregates (kpi_*, agg_*), silver=cleaned, diamond=executiv
       
       await saveERDData();
       hideProcessModal();
+      updateERDEmptyState();
       
       // Clear selection
       LibraryState.selectedFiles.clear();
