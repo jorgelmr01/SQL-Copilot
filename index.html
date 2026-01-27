@@ -653,6 +653,15 @@
           </select>
         </div>
 
+        <!-- Token Limits -->
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Max Context Tokens</label>
+          <input type="number" id="settings-max-tokens" value="16000" min="4000" max="128000" step="1000"
+            onchange="saveMaxTokensPreference()"
+            class="w-full bg-surface-light border border-surface-lighter rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary">
+          <p class="text-xs text-gray-500 mt-1">Reduce if API calls fail due to context overflow. Default: 16000</p>
+        </div>
+
         <!-- Context Management -->
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-2">Context & History</label>
@@ -2244,6 +2253,10 @@
                   <button onclick="zoomERD(0.8)" class="p-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg transition-colors" title="Zoom Out">
                     <span class="material-symbols-outlined text-sm">zoom_out</span>
                   </button>
+                  <div class="w-px h-6 bg-surface-lighter mx-2"></div>
+                  <button onclick="showMergeTablesModal()" class="p-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg transition-colors" title="Merge Tables">
+                    <span class="material-symbols-outlined text-sm">merge</span>
+                  </button>
                 </div>
                 <div class="flex items-center gap-2">
                   <input type="text" id="erd-search" placeholder="Search tables..." 
@@ -2885,6 +2898,107 @@
           </div>
         </div>
 
+        <!-- Merge Tables Modal -->
+        <div id="merge-tables-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 view-hidden flex items-center justify-center">
+          <div class="bg-surface rounded-2xl w-full max-w-lg shadow-2xl border border-surface-light">
+            <div class="p-4 border-b border-surface-light">
+              <h2 class="text-lg font-semibold font-space flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">merge</span>
+                Merge Tables
+              </h2>
+              <p class="text-sm text-gray-400 mt-1">Combine two tables into one, mapping equivalent columns</p>
+            </div>
+            <div class="p-4 space-y-4">
+              <!-- Table Selection -->
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Source Table (will be removed)</label>
+                  <select id="merge-source-table" onchange="updateMergeColumnMappings()"
+                    class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                    <option value="">Select source...</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Target Table (will be kept)</label>
+                  <select id="merge-target-table" onchange="updateMergeColumnMappings()"
+                    class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                    <option value="">Select target...</option>
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Column Mappings -->
+              <div id="merge-column-mappings" class="max-h-64 overflow-auto">
+                <p class="text-sm text-gray-500 text-center py-4">Select two tables to see column mappings</p>
+              </div>
+              
+              <!-- Actions -->
+              <div class="flex gap-2 pt-2 border-t border-surface-light">
+                <button onclick="hideMergeTablesModal()" 
+                  class="flex-1 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">
+                  Cancel
+                </button>
+                <button onclick="executeMerge()" 
+                  class="flex-1 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-1">
+                  <span class="material-symbols-outlined text-sm">merge</span>
+                  Merge Tables
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Context Warning Modal -->
+        <div id="context-warning-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 view-hidden flex items-center justify-center">
+          <div class="bg-surface rounded-2xl w-full max-w-md shadow-2xl border border-surface-light">
+            <div class="p-4 border-b border-surface-light">
+              <h2 class="text-lg font-semibold font-space flex items-center gap-2">
+                <span class="material-symbols-outlined text-warning">warning</span>
+                Context Too Large
+              </h2>
+            </div>
+            <div class="p-4 space-y-4">
+              <p class="text-sm text-gray-300">
+                Estimated tokens: <span id="estimated-tokens" class="font-mono text-warning"></span> / 
+                <span id="max-tokens-display" class="font-mono"></span>
+              </p>
+              <p class="text-sm text-gray-400">Select what to exclude to reduce context size:</p>
+              
+              <div class="space-y-2">
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" id="exclude-schema" class="accent-primary">
+                  <span>Schema context</span>
+                  <span class="text-xs text-gray-500">(largest reduction)</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" id="exclude-expressions" class="accent-primary">
+                  <span>Expression patterns</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" id="exclude-joins" class="accent-primary">
+                  <span>Join guidance</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" id="exclude-lineage" class="accent-primary">
+                  <span>Data lineage</span>
+                </label>
+              </div>
+              
+              <div class="flex gap-2 pt-2 border-t border-surface-light">
+                <button onclick="hideContextWarningModal()" 
+                  class="flex-1 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">
+                  Cancel
+                </button>
+                <button onclick="retryWithReducedContext()" 
+                  class="flex-1 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-1">
+                  <span class="material-symbols-outlined text-sm">refresh</span>
+                  Retry with Selection
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- ==================== LOADING OVERLAY ==================== -->
         <div id="loading-overlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 view-hidden flex items-center justify-center">
           <div class="bg-surface rounded-2xl p-8 shadow-xl text-center">
@@ -2906,6 +3020,7 @@
       apiKey: null,
       selectedModel: 'gpt-5.1-codex',
       selectedDialect: 'presto',  // presto, spark, pyspark
+      maxContextTokens: 16000,  // Default max tokens for context
       currentQuery: {
         prompt: '',
         logic: null,
@@ -2982,6 +3097,13 @@
         document.getElementById('dialect-select').value = savedDialect;
       }
 
+      // Load max tokens preference
+      const savedMaxTokens = localStorage.getItem('sql_copilot_max_tokens');
+      if (savedMaxTokens) {
+        AppState.maxContextTokens = parseInt(savedMaxTokens);
+        document.getElementById('settings-max-tokens').value = savedMaxTokens;
+      }
+
       // Load context
       const savedContext = localStorage.getItem('sql_copilot_context');
       if (savedContext) {
@@ -3047,6 +3169,14 @@
       localStorage.setItem('sql_copilot_model', model);
       document.getElementById('model-select').value = model;
       showToast('Model preference saved', 'success');
+    }
+
+    function saveMaxTokensPreference() {
+      const maxTokens = parseInt(document.getElementById('settings-max-tokens').value) || 16000;
+      AppState.maxContextTokens = Math.max(4000, Math.min(128000, maxTokens));  // Clamp to valid range
+      localStorage.setItem('sql_copilot_max_tokens', AppState.maxContextTokens.toString());
+      document.getElementById('settings-max-tokens').value = AppState.maxContextTokens;
+      showToast('Token limit saved', 'success');
     }
 
     function saveContext() {
@@ -3751,11 +3881,81 @@
      * 
      * Note: temperature/top_p only supported when reasoning.effort is "none"
      */
-    async function callOpenAI(systemPrompt, userPrompt, parseJSON = false) {
+
+    // ==================== TOKEN ESTIMATION & CONTEXT MANAGEMENT ====================
+    
+    function estimateTokens(text) {
+      if (!text) return 0;
+      // Rough estimate: ~4 characters per token for English text
+      // This is a conservative estimate - actual tokenization may vary
+      return Math.ceil(text.length / 4);
+    }
+
+    // State for context reduction retry
+    let pendingContextCall = null;
+
+    function showContextWarningModal(estimated, maxTokens) {
+      document.getElementById('estimated-tokens').textContent = estimated.toLocaleString();
+      document.getElementById('max-tokens-display').textContent = maxTokens.toLocaleString();
+      
+      // Reset checkboxes
+      document.getElementById('exclude-schema').checked = false;
+      document.getElementById('exclude-expressions').checked = false;
+      document.getElementById('exclude-joins').checked = false;
+      document.getElementById('exclude-lineage').checked = false;
+      
+      document.getElementById('context-warning-modal').classList.remove('view-hidden');
+    }
+
+    function hideContextWarningModal() {
+      document.getElementById('context-warning-modal').classList.add('view-hidden');
+      pendingContextCall = null;
+    }
+
+    function getContextExclusions() {
+      return {
+        excludeSchema: document.getElementById('exclude-schema').checked,
+        excludeExpressions: document.getElementById('exclude-expressions').checked,
+        excludeJoins: document.getElementById('exclude-joins').checked,
+        excludeLineage: document.getElementById('exclude-lineage').checked
+      };
+    }
+
+    async function retryWithReducedContext() {
+      hideContextWarningModal();
+      
+      if (pendingContextCall) {
+        const { callback, args } = pendingContextCall;
+        pendingContextCall = null;
+        
+        // Call the original function with exclusion flags
+        const exclusions = getContextExclusions();
+        if (callback) {
+          await callback(...args, exclusions);
+        }
+      } else {
+        showToast('No pending operation to retry', 'warning');
+      }
+    }
+
+    async function callOpenAI(systemPrompt, userPrompt, parseJSON = false, skipTokenCheck = false) {
       if (!AppState.apiKey) {
         showToast('Please set your OpenAI API key in Settings', 'error');
         showSettingsModal();
         return null;
+      }
+
+      // Check token count before making API call (unless skipped)
+      if (!skipTokenCheck) {
+        const totalPrompt = (systemPrompt || '') + (userPrompt || '');
+        const estimatedTokens = estimateTokens(totalPrompt);
+        
+        if (estimatedTokens > AppState.maxContextTokens) {
+          showContextWarningModal(estimatedTokens, AppState.maxContextTokens);
+          showToast(`Context too large (${estimatedTokens.toLocaleString()} tokens). Please reduce or adjust settings.`, 'warning');
+          hideLoading();
+          return null;
+        }
       }
 
       const model = document.getElementById('model-select').value;
@@ -4587,6 +4787,12 @@ ${schemaContext}`;
     }
 
     // ==================== CONFIRM MAPPINGS ====================
+    
+    // Helper to escape special regex characters
+    function escapeRegex(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
     function confirmMappings() {
       const mappings = {};
       const variables = AppState.currentQuery.variables || [];
@@ -4599,6 +4805,32 @@ ${schemaContext}`;
           AppState.context.glossary[variable] = mapping;
         }
       });
+      
+      // Replace placeholders with real names in logic JSON
+      // This ensures AI only sees real names, not confusing placeholder/real name pairs
+      if (AppState.currentQuery.logic && Object.keys(mappings).length > 0) {
+        let logicStr = JSON.stringify(AppState.currentQuery.logic);
+        
+        Object.entries(mappings).forEach(([placeholder, realName]) => {
+          // Replace {{PLACEHOLDER}} format (exact match)
+          logicStr = logicStr.replace(new RegExp(escapeRegex(placeholder), 'g'), realName);
+          
+          // Also replace without braces (PLACEHOLDER) as word boundary
+          const withoutBraces = placeholder.replace(/^\{\{|\}\}$/g, '');
+          if (withoutBraces) {
+            logicStr = logicStr.replace(new RegExp(`\\b${escapeRegex(withoutBraces)}\\b`, 'g'), realName);
+          }
+        });
+        
+        try {
+          AppState.currentQuery.logic = JSON.parse(logicStr);
+        } catch (e) {
+          console.error('Failed to parse substituted logic:', e);
+        }
+      }
+      
+      // Clear variables array since placeholders are now replaced with real names
+      AppState.currentQuery.variables = [];
       
       AppState.currentQuery.mappings = mappings;
       AppState.currentQuery.placeholderMode = false;  // Clear placeholder mode
@@ -4630,14 +4862,8 @@ ${schemaContext}`;
         includeLineage: true,
         dialect: selectedDialect 
       });
-      const mappings = AppState.currentQuery.mappings || {};
       const logic = AppState.currentQuery.logic || {};
       const variables = AppState.currentQuery.variables || [];
-      
-      // Build a clear mapping table for the AI
-      const mappingTable = Object.entries(mappings)
-        .map(([placeholder, realName]) => `  ${placeholder} → ${realName}`)
-        .join('\n');
       
       // Build new declarations context (for newly declared tables/columns not in schema)
       const newDeclarations = AppState.currentQuery.newDeclarations || [];
@@ -4685,22 +4911,10 @@ ${selectedDialect === 'presto' ? 'Use Presto/Trino SQL syntax (compatible with A
 ${selectedDialect === 'spark' ? 'Use Spark SQL syntax (compatible with AWS EMR).' : ''}
 ${selectedDialect === 'pyspark' ? 'Generate PySpark DataFrame code (compatible with EMR Serverless). Use the DataFrame API with .select(), .filter(), .groupBy(), .agg(), etc.' : ''}
 ${placeholderInstructions}
-${!isPlaceholderMode ? `VARIABLE SUBSTITUTION - CRITICAL:
-You MUST replace ALL placeholders with their mapped REAL names. DO NOT use placeholder names in your SQL.
-
-PLACEHOLDER → REAL NAME MAPPINGS (use the REAL NAME on the right, NOT the placeholder on the left):
-${mappingTable || '(No mappings provided)'}
-
-REAL NAMES TO USE IN YOUR SQL (use ONLY these exact names):
-${Object.values(mappings).map(v => `- ${v}`).join('\n') || '(No mappings)'}
-${newDeclsContext}
-CRITICAL RULES FOR SUBSTITUTION:
-- Your SQL must contain ONLY the real names (right side of arrows above)
-- NEVER use placeholder names like {{ORDERS_TABLE}} or ORDERS_TABLE - always use the mapped real name instead
-- If a placeholder appears in the query logic, REPLACE it with its mapped real name
-- If a placeholder was not mapped, leave a comment: /* {{PLACEHOLDER}} - needs mapping */
-
-Example: If mapping says "{{ORDERS_TABLE}} → MAIN_TABLE", your SQL must use "MAIN_TABLE", NOT "ORDERS_TABLE"` : ''}
+${!isPlaceholderMode ? `TABLE AND COLUMN NAMES:
+The query logic below contains the actual table and column names to use in your SQL.
+Use these names exactly as they appear in the logic - they are the real database names.
+${newDeclsContext}` : ''}
 
 Query Logic:
 ${JSON.stringify(logic.queryPlan || logic)}
@@ -4721,25 +4935,25 @@ RULES:
 ${isPlaceholderMode ? `1. Use the placeholder variable names wrapped in {{ }} directly in the SQL
 2. Make the query syntactically correct except for placeholder names
 3. Add comments explaining what each placeholder represents
-4. Write clean, efficient SQL structure that can be easily adapted` : `1. SUBSTITUTE all placeholders with their mapped REAL names - use the names from "REAL NAMES TO USE" section
-2. Your SQL must NOT contain any placeholder names (like ORDERS_TABLE, CUSTOMER_ID_COLUMN) - only real mapped names
-3. DO NOT invent new table or column names${newDeclarations.length > 0 ? ' (except those in NEW TABLES/COLUMNS DECLARED BY USER)' : ''}
-4. If a variable wasn't mapped, leave a comment: /* MISSING: description of what's needed */
-${newDeclarations.length > 0 ? '5. For newly declared tables, use the specified join relationships to connect them to the existing schema' : ''}`}
+4. Write clean, efficient SQL structure that can be easily adapted` : `1. Use the table and column names exactly as specified in the query logic
+2. DO NOT invent new table or column names${newDeclarations.length > 0 ? ' (except those in NEW TABLES/COLUMNS DECLARED BY USER)' : ''}
+3. If additional data is needed, leave a comment: /* MISSING: description of what's needed */
+${newDeclarations.length > 0 ? '4. For newly declared tables, use the specified join relationships to connect them to the existing schema' : ''}`}
 - Write clean, efficient SQL with helpful comments
 - Return ONLY the SQL query, no explanations before or after
 - For columns marked with aggregation types ({SUM}, {COUNT}, etc.), apply consistent aggregation patterns
 - Respect table grain levels - don't aggregate beyond what the data supports
 - Use the expression patterns from the schema as templates for similar calculations
 
-${isPlaceholderMode ? 'Generate the query with placeholder names - this is for testing the query structure.' : 'REMEMBER: Your final SQL must use ONLY the real mapped names. Double-check that no placeholder names remain in your output.'}`;
+${isPlaceholderMode ? 'Generate the query with placeholder names - this is for testing the query structure.' : 'Generate the SQL using the exact table and column names from the logic.'}`;
 
       const result = await callOpenAI(systemPrompt, AppState.currentQuery.prompt);
       hideLoading();
 
       if (result) {
-        // Validate generated SQL for unmapped variables
+        // Validate generated SQL for table/column references
         const sqlLower = result.toLowerCase();
+        const mappings = AppState.currentQuery.mappings || {};
         const mappedValues = Object.values(mappings).map(v => v.toLowerCase());
         
         // Check for potential new variables (simple heuristic)
@@ -7993,6 +8207,150 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       renderERD();
       updateERDEmptyState();
       showToast('Table deleted', 'success');
+    }
+
+    // ==================== ERD TABLE MERGE ====================
+    function showMergeTablesModal() {
+      if (ERDState.tables.length < 2) {
+        showToast('Need at least 2 tables to merge', 'warning');
+        return;
+      }
+      
+      // Populate dropdowns
+      const sourceSelect = document.getElementById('merge-source-table');
+      const targetSelect = document.getElementById('merge-target-table');
+      
+      const tableOptions = ERDState.tables.map(t => 
+        `<option value="${t.id}">${t.name} (${t.columns.length} cols)</option>`
+      ).join('');
+      
+      sourceSelect.innerHTML = '<option value="">Select source...</option>' + tableOptions;
+      targetSelect.innerHTML = '<option value="">Select target...</option>' + tableOptions;
+      
+      // Reset column mappings
+      document.getElementById('merge-column-mappings').innerHTML = 
+        '<p class="text-sm text-gray-500 text-center py-4">Select two tables to see column mappings</p>';
+      
+      document.getElementById('merge-tables-modal').classList.remove('view-hidden');
+    }
+
+    function hideMergeTablesModal() {
+      document.getElementById('merge-tables-modal').classList.add('view-hidden');
+    }
+
+    function updateMergeColumnMappings() {
+      const sourceId = document.getElementById('merge-source-table').value;
+      const targetId = document.getElementById('merge-target-table').value;
+      const container = document.getElementById('merge-column-mappings');
+      
+      if (!sourceId || !targetId) {
+        container.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Select two tables to see column mappings</p>';
+        return;
+      }
+      
+      if (sourceId === targetId) {
+        container.innerHTML = '<p class="text-sm text-warning text-center py-4">Source and target must be different tables</p>';
+        return;
+      }
+      
+      const source = ERDState.tables.find(t => t.id === sourceId);
+      const target = ERDState.tables.find(t => t.id === targetId);
+      
+      if (!source || !target) return;
+      
+      // Build column mapping UI
+      container.innerHTML = `
+        <div class="mb-3">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Map source columns to target equivalents:</p>
+          <p class="text-xs text-gray-400 mb-2">Unmapped columns will be added to target table</p>
+        </div>
+        ${source.columns.map((col, i) => {
+          // Try to auto-match by name
+          const autoMatch = target.columns.find(tc => tc.name.toLowerCase() === col.name.toLowerCase());
+          return `
+            <div class="flex items-center gap-2 py-2 border-b border-surface-light">
+              <span class="flex-1 font-mono text-sm">${col.name}</span>
+              <span class="material-symbols-outlined text-sm text-gray-500">arrow_forward</span>
+              <select id="merge-col-${i}" class="flex-1 bg-surface-light border border-surface-lighter rounded px-2 py-1 text-sm">
+                <option value="">-- Add as new --</option>
+                ${target.columns.map(tc => 
+                  `<option value="${tc.name}" ${autoMatch?.name === tc.name ? 'selected' : ''}>${tc.name}</option>`
+                ).join('')}
+              </select>
+            </div>
+          `;
+        }).join('')}
+      `;
+    }
+
+    async function executeMerge() {
+      const sourceId = document.getElementById('merge-source-table').value;
+      const targetId = document.getElementById('merge-target-table').value;
+      
+      if (!sourceId || !targetId || sourceId === targetId) {
+        showToast('Please select different source and target tables', 'warning');
+        return;
+      }
+      
+      const source = ERDState.tables.find(t => t.id === sourceId);
+      const target = ERDState.tables.find(t => t.id === targetId);
+      
+      if (!source || !target) return;
+      
+      // Get column mappings from UI
+      const columnMappings = {};
+      source.columns.forEach((col, i) => {
+        const select = document.getElementById(`merge-col-${i}`);
+        if (select && select.value) {
+          columnMappings[col.name] = select.value;
+        }
+      });
+      
+      // Add unmapped source columns to target
+      source.columns.forEach(col => {
+        if (!columnMappings[col.name]) {
+          // Check if column already exists in target
+          if (!target.columns.some(tc => tc.name.toLowerCase() === col.name.toLowerCase())) {
+            target.columns.push({ ...col });
+          }
+        }
+      });
+      
+      // Update relationships pointing to source table
+      ERDState.relationships.forEach(rel => {
+        if (rel.from.table === source.name || rel.from.table === source.id) {
+          rel.from.table = target.name;
+          // Update column name if mapped
+          if (columnMappings[rel.from.column]) {
+            rel.from.column = columnMappings[rel.from.column];
+          }
+        }
+        if (rel.to.table === source.name || rel.to.table === source.id) {
+          rel.to.table = target.name;
+          // Update column name if mapped
+          if (columnMappings[rel.to.column]) {
+            rel.to.column = columnMappings[rel.to.column];
+          }
+        }
+      });
+      
+      // Remove duplicate relationships after merge
+      const relSet = new Set();
+      ERDState.relationships = ERDState.relationships.filter(rel => {
+        const key = `${rel.from.table}.${rel.from.column}-${rel.to.table}.${rel.to.column}`;
+        if (relSet.has(key)) return false;
+        relSet.add(key);
+        return true;
+      });
+      
+      // Remove source table
+      ERDState.tables = ERDState.tables.filter(t => t.id !== sourceId);
+      
+      await saveERDData();
+      hideMergeTablesModal();
+      renderERD();
+      updateERDEmptyState();
+      showToast(`Merged "${source.name}" into "${target.name}"`, 'success');
     }
 
     // ==================== ERD COLUMN MANAGEMENT ====================
