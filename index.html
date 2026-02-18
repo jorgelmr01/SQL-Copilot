@@ -412,6 +412,21 @@
       opacity: 0.25;
       transition: opacity 0.3s ease;
     }
+    /* Floating ERD progress widget */
+    #erd-progress-widget {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 40;
+      width: 320px;
+      transition: all 0.3s ease;
+    }
+    #erd-progress-widget.minimized {
+      width: auto;
+    }
+    #erd-progress-widget .progress-bar-fill {
+      transition: width 0.4s ease;
+    }
     /* Stub table styling - dashed border, reduced opacity */
     .erd-table-node.stub {
       opacity: 0.7;
@@ -3146,6 +3161,60 @@
           </div>
         </div>
 
+        <!-- ==================== FLOATING ERD PROGRESS WIDGET ==================== -->
+        <div id="erd-progress-widget" class="view-hidden">
+          <!-- Expanded view -->
+          <div id="erd-progress-expanded" class="bg-surface rounded-2xl shadow-2xl border border-surface-light overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-surface-light flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+                <span class="text-sm font-medium">Processing to ERD</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <button onclick="minimizeERDProgress()" class="p-1 hover:bg-surface-light rounded transition-colors" title="Minimize">
+                  <span class="material-symbols-outlined text-sm">minimize</span>
+                </button>
+                <button onclick="cancelERDProcessing()" class="p-1 hover:bg-error/20 text-gray-400 hover:text-error rounded transition-colors" title="Cancel">
+                  <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
+            </div>
+            <div class="px-4 py-3 space-y-2">
+              <div class="flex items-center justify-between text-xs text-gray-400">
+                <span id="erd-progress-status">Reading files...</span>
+                <span id="erd-progress-percent">0%</span>
+              </div>
+              <div class="w-full h-1.5 bg-surface-light rounded-full overflow-hidden">
+                <div id="erd-progress-bar" class="progress-bar-fill h-full bg-primary rounded-full" style="width: 0%"></div>
+              </div>
+              <div id="erd-progress-detail" class="text-xs text-gray-500">Preparing...</div>
+            </div>
+          </div>
+          <!-- Minimized pill -->
+          <div id="erd-progress-minimized" class="view-hidden cursor-pointer" onclick="expandERDProgress()">
+            <div class="bg-surface rounded-full shadow-2xl border border-surface-light px-4 py-2 flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+              <span id="erd-progress-pill" class="text-xs font-medium">0/0 batches</span>
+              <button onclick="event.stopPropagation(); cancelERDProcessing()" class="p-0.5 hover:bg-error/20 text-gray-400 hover:text-error rounded transition-colors" title="Cancel">
+                <span class="material-symbols-outlined text-xs">close</span>
+              </button>
+            </div>
+          </div>
+          <!-- Done state -->
+          <div id="erd-progress-done" class="view-hidden cursor-pointer" onclick="openERDProcessResults()">
+            <div class="bg-surface rounded-2xl shadow-2xl border border-primary/30 px-4 py-3 flex items-center gap-3">
+              <span class="material-symbols-outlined text-primary">check_circle</span>
+              <div>
+                <p class="text-sm font-medium">Processing complete</p>
+                <p id="erd-progress-done-detail" class="text-xs text-gray-400">Click to view results</p>
+              </div>
+              <button onclick="event.stopPropagation(); hideERDProgressWidget()" class="ml-auto p-1 hover:bg-surface-light rounded transition-colors">
+                <span class="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </main>
   </div>
@@ -4072,6 +4141,86 @@
 
     function hideLoading() {
       document.getElementById('loading-overlay').classList.add('view-hidden');
+    }
+
+    // ==================== ERD PROGRESS WIDGET ====================
+    let erdProcessingAbort = null;
+    let erdProcessingResults = null;
+
+    function showERDProgressWidget(totalBatches) {
+      const widget = document.getElementById('erd-progress-widget');
+      widget.classList.remove('view-hidden');
+      document.getElementById('erd-progress-expanded').classList.remove('view-hidden');
+      document.getElementById('erd-progress-minimized').classList.add('view-hidden');
+      document.getElementById('erd-progress-done').classList.add('view-hidden');
+
+      document.getElementById('erd-progress-bar').style.width = '0%';
+      document.getElementById('erd-progress-percent').textContent = '0%';
+      document.getElementById('erd-progress-status').textContent = totalBatches > 1
+        ? `Batch 0/${totalBatches}` : 'Analyzing...';
+      document.getElementById('erd-progress-detail').textContent = 'Sending to AI...';
+      document.getElementById('erd-progress-pill').textContent = `0/${totalBatches}`;
+    }
+
+    function updateERDProgress(completed, total, partialResults) {
+      const pct = Math.round((completed / total) * 100);
+      document.getElementById('erd-progress-bar').style.width = `${pct}%`;
+      document.getElementById('erd-progress-percent').textContent = `${pct}%`;
+      document.getElementById('erd-progress-status').textContent = `Batch ${completed}/${total}`;
+      document.getElementById('erd-progress-pill').textContent = `${completed}/${total}`;
+
+      if (partialResults) {
+        const tCount = partialResults.tables?.length || 0;
+        const rCount = partialResults.relationships?.length || 0;
+        document.getElementById('erd-progress-detail').textContent =
+          `${tCount} tables, ${rCount} relationships found so far`;
+      }
+    }
+
+    function completeERDProgress(results) {
+      erdProcessingResults = results;
+      document.getElementById('erd-progress-expanded').classList.add('view-hidden');
+      document.getElementById('erd-progress-minimized').classList.add('view-hidden');
+      document.getElementById('erd-progress-done').classList.remove('view-hidden');
+
+      const tCount = results?.tables?.length || 0;
+      const rCount = results?.relationships?.length || 0;
+      document.getElementById('erd-progress-done-detail').textContent =
+        `${tCount} tables, ${rCount} relationships — click to review`;
+    }
+
+    function minimizeERDProgress() {
+      document.getElementById('erd-progress-expanded').classList.add('view-hidden');
+      document.getElementById('erd-progress-minimized').classList.remove('view-hidden');
+    }
+
+    function expandERDProgress() {
+      document.getElementById('erd-progress-minimized').classList.add('view-hidden');
+      document.getElementById('erd-progress-expanded').classList.remove('view-hidden');
+    }
+
+    function cancelERDProcessing() {
+      if (erdProcessingAbort) {
+        erdProcessingAbort.abort();
+        erdProcessingAbort = null;
+      }
+      hideERDProgressWidget();
+      showToast('ERD processing cancelled', 'info');
+    }
+
+    function hideERDProgressWidget() {
+      document.getElementById('erd-progress-widget').classList.add('view-hidden');
+      erdProcessingResults = null;
+    }
+
+    function openERDProcessResults() {
+      if (erdProcessingResults) {
+        document.getElementById('library-process-modal').classList.remove('view-hidden');
+        document.getElementById('process-loading').classList.add('view-hidden');
+        showProcessResults(erdProcessingResults);
+        document.getElementById('btn-confirm-process').disabled = false;
+      }
+      hideERDProgressWidget();
     }
 
     // ==================== QUERY INPUT HELPERS ====================
@@ -11766,93 +11915,115 @@ Infer column types from context. Identify JOINs as relationships.`;
     // ==================== PROCESS TO ERD ====================
     async function processSelectedToERD() {
       if (LibraryState.selectedFiles.size === 0) return;
-      
-      document.getElementById('library-process-modal').classList.remove('view-hidden');
-      document.getElementById('process-loading').classList.remove('view-hidden');
-      document.getElementById('process-results').classList.add('view-hidden');
-      document.getElementById('btn-confirm-process').disabled = true;
-      
+
+      // Set up abort controller
+      erdProcessingAbort = new AbortController();
+      const signal = erdProcessingAbort.signal;
+
       try {
-        // Collect SQL content from selected files
-        const sqlContents = [];
-        for (const path of LibraryState.selectedFiles) {
-          const file = LibraryState.fileList.find(f => f.path === path);
-          if (file) {
+        // Parallel file reads
+        const sqlContents = (await Promise.all(
+          [...LibraryState.selectedFiles].map(async path => {
+            const file = LibraryState.fileList.find(f => f.path === path);
+            if (!file) return null;
             const fileObj = await file.handle.getFile();
             const content = await fileObj.text();
-            sqlContents.push({
-              path,
-              content,
-              tableType: file.tableType
-            });
-          }
-        }
-        
-        // Use AI to analyze SQL
-        const detected = await analyzeMultipleSQLForSchema(sqlContents);
-        
+            return { path, content, tableType: file.tableType };
+          })
+        )).filter(Boolean);
+
+        if (signal.aborted) return;
+
+        // Calculate batch count for progress display
+        const MAX_FILES_PER_BATCH = 5;
+        const totalBatches = Math.max(1, Math.ceil(sqlContents.length / MAX_FILES_PER_BATCH));
+        showERDProgressWidget(totalBatches);
+
+        // Progress callback updates the floating widget
+        const allResults = { tables: [], relationships: [] };
+        const onProgress = ({ completed, total }) => {
+          updateERDProgress(completed, total, allResults);
+        };
+
+        // Run analysis in background (non-blocking -- no modal, no overlay)
+        const detected = await analyzeMultipleSQLForSchema(sqlContents, { onProgress, signal, allResults });
+
+        if (signal.aborted) return;
+
         if (detected) {
-          showProcessResults(detected);
+          erdProcessingResults = detected;
+          completeERDProgress(detected);
+          showToast(`Schema analysis complete: ${detected.tables?.length || 0} tables found`, 'success');
         } else {
+          hideERDProgressWidget();
           showToast('Could not analyze SQL files', 'error');
-          hideProcessModal();
         }
       } catch (e) {
+        if (e.name === 'AbortError') return;
+        hideERDProgressWidget();
         showToast('Error processing files: ' + e.message, 'error');
-        hideProcessModal();
+      } finally {
+        erdProcessingAbort = null;
       }
     }
 
-    async function analyzeMultipleSQLForSchema(sqlFiles) {
-      const MAX_FILES_PER_BATCH = 5;  // Process 5 files per batch (up from 2)
-      const CONCURRENCY = 3;          // Run up to 3 batches in parallel
-      
-      // Helper to merge a batch result into the accumulator
-      function mergeResult(allResults, batchResult) {
+    async function analyzeMultipleSQLForSchema(sqlFiles, { onProgress, signal, allResults } = {}) {
+      const MAX_FILES_PER_BATCH = 5;
+      const CONCURRENCY = 5;
+
+      function mergeResult(acc, batchResult) {
         if (!batchResult) return;
         batchResult.tables?.forEach(table => {
-          if (!allResults.tables.find(t => t.name.toLowerCase() === table.name.toLowerCase())) {
-            allResults.tables.push(table);
+          if (!acc.tables.find(t => t.name.toLowerCase() === table.name.toLowerCase())) {
+            acc.tables.push(table);
           }
         });
         batchResult.relationships?.forEach(rel => {
-          const exists = allResults.relationships.find(r => 
+          const exists = acc.relationships.find(r =>
             r.from?.table === rel.from?.table && r.from?.column === rel.from?.column &&
             r.to?.table === rel.to?.table && r.to?.column === rel.to?.column
           );
           if (!exists) {
-            allResults.relationships.push(rel);
+            acc.relationships.push(rel);
           }
         });
       }
-      
-      if (sqlFiles.length > MAX_FILES_PER_BATCH) {
-        // Split into batches
-        const batches = [];
-        for (let i = 0; i < sqlFiles.length; i += MAX_FILES_PER_BATCH) {
-          batches.push(sqlFiles.slice(i, i + MAX_FILES_PER_BATCH));
-        }
-        
-        const allResults = { tables: [], relationships: [] };
-        
-        // Process batches in parallel chunks of CONCURRENCY
-        for (let i = 0; i < batches.length; i += CONCURRENCY) {
-          const chunk = batches.slice(i, i + CONCURRENCY);
-          const startIdx = i + 1;
-          const endIdx = Math.min(i + CONCURRENCY, batches.length);
-          showLoading(`Analyzing batches ${startIdx}-${endIdx} of ${batches.length} (parallel)...`);
-          
-          const results = await Promise.all(
-            chunk.map(batch => analyzeSchemaForBatch(batch))
-          );
-          
-          results.forEach(result => mergeResult(allResults, result));
-        }
-        
-        return allResults;
+
+      const acc = allResults || { tables: [], relationships: [] };
+
+      if (sqlFiles.length <= MAX_FILES_PER_BATCH) {
+        const result = await analyzeSchemaForBatch(sqlFiles, signal);
+        mergeResult(acc, result);
+        if (onProgress) onProgress({ completed: 1, total: 1 });
+        return acc.tables.length > 0 ? acc : result;
       }
-      
-      return analyzeSchemaForBatch(sqlFiles);
+
+      // Split into batches
+      const batches = [];
+      for (let i = 0; i < sqlFiles.length; i += MAX_FILES_PER_BATCH) {
+        batches.push(sqlFiles.slice(i, i + MAX_FILES_PER_BATCH));
+      }
+
+      let completed = 0;
+      const total = batches.length;
+
+      // Process in parallel waves of CONCURRENCY
+      for (let i = 0; i < batches.length; i += CONCURRENCY) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        const chunk = batches.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          chunk.map(batch => analyzeSchemaForBatch(batch, signal))
+        );
+
+        results.forEach(result => {
+          mergeResult(acc, result);
+          completed++;
+          if (onProgress) onProgress({ completed, total });
+        });
+      }
+
+      return acc;
     }
     
     // Validate and clean schema analysis results
@@ -12275,7 +12446,7 @@ Infer column types from context. Identify JOINs as relationships.`;
       return result;
     }
     
-    async function analyzeSchemaForBatch(sqlFiles) {
+    async function analyzeSchemaForBatch(sqlFiles, signal) {
       const combinedSQL = sqlFiles.map(f => {
         const content = f.content.length > 6000 
           ? f.content.substring(0, 6000) + '\n-- [TRUNCATED]' 
@@ -12336,8 +12507,9 @@ TABLE TYPES: raw=source, gold=KPI/aggregates, silver=cleaned`;
       let lastError = null;
       
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         try {
-          const result = await callOpenAIForSchema(systemPrompt, combinedSQL);
+          const result = await callOpenAIForSchema(systemPrompt, combinedSQL, signal);
           
           if (result && result.tables) {
             // Apply table types from file metadata
@@ -12368,7 +12540,7 @@ TABLE TYPES: raw=source, gold=KPI/aggregates, silver=cleaned`;
     
     // Special version of callOpenAI with higher token limit for schema analysis
     // Uses low reasoning effort since schema extraction is formulaic, not creative
-    async function callOpenAIForSchema(systemPrompt, userPrompt) {
+    async function callOpenAIForSchema(systemPrompt, userPrompt, signal) {
       if (!AppState.apiKey) {
         showToast('Please set your OpenAI API key in Settings', 'error');
         showSettingsModal();
@@ -12388,14 +12560,17 @@ TABLE TYPES: raw=source, gold=KPI/aggregates, silver=cleaned`;
           max_output_tokens: 16000  // Reduced from 32000 - fast prompts produce smaller output
         };
 
-        const response = await fetch('https://api.openai.com/v1/responses', {
+        const fetchOptions = {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${AppState.apiKey}`
           },
           body: JSON.stringify(requestBody)
-        });
+        };
+        if (signal) fetchOptions.signal = signal;
+
+        const response = await fetch('https://api.openai.com/v1/responses', fetchOptions);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
