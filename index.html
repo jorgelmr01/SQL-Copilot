@@ -46,6 +46,8 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <!-- D3.js for ERD visualization -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- SQL Copilot v2 Compiler Modules -->
+  <script src="src/bundle.js"></script>
   <style>
     * {
       font-family: 'Noto Sans', sans-serif;
@@ -10782,21 +10784,108 @@ If action is unknown, set message to explain what went wrong.`,
       return null;
     }
 
-    // ==================== SCHEMA DETECTION FROM QUERIES ====================
+    // ==================== SCHEMA DETECTION FROM QUERIES (V2 Compiler-Based) ====================
     async function analyzeQueryForSchema(sql) {
-      const systemPrompt = `Analyze this SQL query and extract schema information. Return JSON:
-{
-  "tables": [{ "name": "table_name", "columns": [{ "name": "col", "type": "TYPE", "isPK": false }] }],
-  "relationships": [{ "from": { "table": "t1", "column": "c1" }, "to": { "table": "t2", "column": "c2" }, "type": "many-to-one" }]
-}
-
-Infer column types from context. Identify JOINs as relationships.`;
-
+      // Use the v2 compiler-based parser instead of AI
       try {
-        const result = await callOpenAI(systemPrompt, sql, true);
-        return result;
+        const { SQLParser, SchemaExtractor, renderExpression } = window.SQLCopilotV2;
+        
+        const parser = new SQLParser(AppState.selectedDialect || 'presto');
+        const extractor = new SchemaExtractor();
+        
+        // Parse SQL to IR
+        const ir = parser.parse(sql);
+        
+        if (ir.type === 'ERROR') {
+          console.warn('SQL parse error:', ir.errors);
+          return null;
+        }
+        
+        // Extract schema from IR
+        const schema = extractor.extract(ir, 'query_result');
+        
+        // Convert to the format expected by showSchemaDetectModal
+        const tables = [];
+        const relationships = [];
+        
+        // Build table from extracted columns
+        if (schema.columns && schema.columns.length > 0) {
+          // Group columns by source table if possible
+          const tableColumns = new Map();
+          
+          for (const col of schema.columns) {
+            // Try to determine source table from sourceColumns
+            let sourceTable = 'query_result';
+            if (col.sourceColumns && col.sourceColumns.length > 0) {
+              const firstSource = col.sourceColumns[0];
+              if (firstSource.includes('.')) {
+                sourceTable = firstSource.split('.')[0];
+              }
+            }
+            
+            if (!tableColumns.has(sourceTable)) {
+              tableColumns.set(sourceTable, []);
+            }
+            
+            tableColumns.get(sourceTable).push({
+              name: col.name,
+              type: col.type || 'VARCHAR',
+              isPK: col.isPK || false,
+              isFK: col.isFK || false,
+              semantic_role: col.semanticRole,
+              aggregation_type: col.aggregationType !== 'none' ? col.aggregationType : null,
+              expression_sql: col.expressionSQL,
+              source_columns: col.sourceColumns,
+              type_confidence: col.typeConfidence
+            });
+          }
+          
+          // Create table entries
+          for (const [tableName, columns] of tableColumns) {
+            tables.push({
+              name: tableName,
+              columns: columns,
+              is_aggregated: schema.isAggregated,
+              grain_columns: schema.grainColumns
+            });
+          }
+        }
+        
+        // Extract source tables from dependencies
+        for (const dep of (schema.dependencies || [])) {
+          const tableName = dep.split('.').pop();
+          if (!tables.some(t => t.name.toLowerCase() === tableName.toLowerCase())) {
+            tables.push({
+              name: tableName,
+              columns: [],
+              is_stub: true
+            });
+          }
+        }
+        
+        // Extract relationships from join metadata
+        for (const join of (schema.joinMetadata || [])) {
+          if (join.predicate) {
+            // Parse join predicate to extract relationship
+            const eqMatch = join.predicate.match(/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/);
+            if (eqMatch) {
+              relationships.push({
+                from: { table: eqMatch[1], column: eqMatch[2] },
+                to: { table: eqMatch[3], column: eqMatch[4] },
+                type: join.type === 'LEFT' ? 'many-to-one' : 'one-to-many',
+                join_type: join.type,
+                on_sql: join.predicate
+              });
+            }
+          }
+        }
+        
+        console.log('V2 Schema extraction result:', { tables, relationships, schema });
+        
+        return { tables, relationships };
+        
       } catch (e) {
-        console.error('Schema analysis failed:', e);
+        console.error('V2 Schema analysis failed:', e);
         return null;
       }
     }
@@ -12447,95 +12536,106 @@ Infer column types from context. Identify JOINs as relationships.`;
     }
     
     async function analyzeSchemaForBatch(sqlFiles, signal) {
-      const combinedSQL = sqlFiles.map(f => {
-        const content = f.content.length > 6000 
-          ? f.content.substring(0, 6000) + '\n-- [TRUNCATED]' 
-          : f.content;
-        return `-- File: ${f.path}\n${content}`;
-      }).join('\n\n');
+      // V2 Compiler-based schema analysis - no AI required
+      const { SQLParser, SchemaExtractor } = window.SQLCopilotV2;
       
-      const schemaMode = getSchemaMode();
+      const parser = new SQLParser(AppState.selectedDialect || 'presto');
+      const extractor = new SchemaExtractor();
       
-      // FAST PROMPT: Focuses on essentials - table names, column names/types, descriptions, joins
-      // Skips expression IR, renderings, cardinality analysis, nullability proofs
-      const fastPrompt = `Extract tables, columns, and joins from these SQL files. Output ONLY valid JSON.
-
-RULES:
-- Skip CTE aliases - only real tables (schema.table format or standalone table names)
-- For CTAS: columns from final SELECT only
-- Infer types from names (*_id=BIGINT, *_at/*_ts=TIMESTAMP, *_dt=DATE, *_amt=DECIMAL)
-- Keep descriptions short (5-10 words max)
-
-OUTPUT:
-{"tables":[{"name":"table","description":"short desc","tableType":"raw|gold|silver","columns":[{"name":"col","type":"TYPE","description":"short desc","isPK":false}]}],"relationships":[{"from":{"table":"t1","column":"c1"},"to":{"table":"t2","column":"c2"},"type":"join","join_type":"LEFT"}]}`;
-
-      // LITE MODE: Adds semantic roles and aggregation types
-      const litePrompt = `SQL schema analyzer. Extract metadata for SQL generation. Output ONLY valid JSON.
-
-RULES:
-- Skip CTE aliases. Only emit REAL tables
-- For CTAS: columns from final SELECT only, set grain_columns
-- For columns: name, type, semantic_role (dimension|measure), aggregation_type
-- Infer types from names (*_id=BIGINT, *_at/*_ts=TIMESTAMP, *_dt=DATE, *_amt=DECIMAL)
-- Relationships: join (with join_type, on_sql)
-
-OUTPUT:
-{"tables":[{"name":"schema.table","description":"short desc","tableType":"raw|gold|silver","grain_columns":[],"columns":[{"name":"col","type":"TYPE","description":"short desc","semantic_role":"dimension","aggregation_type":"none","is_grain":false}]}],"relationships":[{"from":{"table":"t1","column":"c1"},"to":{"table":"t2","column":"c2"},"type":"join","join_type":"LEFT","on_sql":"t1.c1 = t2.c2"}]}`;
-
-      // FULL MODE: Complete metadata with expressions and renderings
-      const fullPrompt = `SQL schema analyzer. Extract COMPLETE metadata. Output ONLY valid JSON.
-
-RULES:
-- Skip CTE aliases. Only REAL tables (schema.table format)
-- CTAS: columns from final SELECT, set is_aggregated, grain_columns, primary_key from GROUP BY
-- Columns: name, type, description, semantic_role, aggregation_type, source_columns
-- For computed columns: expression_ir (dialect-neutral AST using ops: avg, sum, count, count_distinct, case, divide, multiply, timestamp_diff_seconds, date_trunc, coalesce, nullif)
-- Stub tables: infer types from names
-- Relationships: lineage (table-to-table) and join (with join_type, on_sql)
-
-OUTPUT:
-{"tables":[{"name":"schema.table","description":"desc","tableType":"raw|gold|silver","is_aggregated":false,"grain_columns":[],"columns":[{"name":"col","type":"TYPE","description":"desc","semantic_role":"measure","aggregation_type":"count_distinct","expression_ir":null,"source_columns":[],"is_grain":false,"isPK":false,"nullable":true}]}],"relationships":[{"from":{"table":"t1","column":"c1"},"to":{"table":"t2","column":"c2"},"type":"join","join_type":"LEFT","on_sql":"t1.c1 = t2.c2"}]}
-
-TABLE TYPES: raw=source, gold=KPI/aggregates, silver=cleaned`;
-
-      // Select prompt: fast by default, lite/full for more detail
-      const systemPrompt = schemaMode === 'lite' ? litePrompt 
-                          : schemaMode === 'full' ? fullPrompt 
-                          : fastPrompt;
-
-      const maxRetries = 1; // Reduced from 2 - fail faster
-      let lastError = null;
+      const tables = [];
+      const relationships = [];
+      const tableMap = new Map(); // Track tables to avoid duplicates
       
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      for (const file of sqlFiles) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        
         try {
-          const result = await callOpenAIForSchema(systemPrompt, combinedSQL, signal);
+          const ir = parser.parse(file.content);
           
-          if (result && result.tables) {
-            // Apply table types from file metadata
-            result.tables.forEach(table => {
-              const matchingFile = sqlFiles.find(f => 
-                f.content.toLowerCase().includes(table.name.toLowerCase())
-              );
-              if (matchingFile && matchingFile.tableType && !table.tableType) {
-                table.tableType = matchingFile.tableType;
+          if (ir.type === 'ERROR') {
+            console.warn(`Parse error in ${file.path}:`, ir.errors);
+            continue;
+          }
+          
+          // Extract model name from file path
+          const fileName = file.path.split(/[/\\]/).pop().replace(/\.sql$/i, '');
+          const schema = extractor.extract(ir, fileName, { layer: file.tableType });
+          
+          // Build table entry
+          const tableEntry = {
+            id: schema.id,
+            name: schema.name,
+            description: schema.description || `Extracted from ${file.path}`,
+            tableType: file.tableType || schema.layer || 'raw',
+            is_aggregated: schema.isAggregated,
+            grain_columns: schema.grainColumns,
+            schema_source: 'compiler_v2',
+            columns: schema.columns.map(col => ({
+              id: col.id,
+              name: col.name,
+              type: col.type,
+              type_confidence: col.typeConfidence,
+              description: col.isComputed ? `Computed: ${col.expressionSQL}` : null,
+              semantic_role: col.semanticRole,
+              aggregation_type: col.aggregationType !== 'none' ? col.aggregationType : null,
+              expression_sql: col.expressionSQL,
+              source_columns: col.sourceColumns,
+              is_grain: schema.grainColumns?.includes(col.name),
+              isPK: col.isPK,
+              isFK: col.isFK,
+              nullable: col.nullable,
+              isComputed: col.isComputed,
+              isPassthrough: col.isPassthrough
+            }))
+          };
+          
+          // Add or merge table
+          if (!tableMap.has(schema.name.toLowerCase())) {
+            tableMap.set(schema.name.toLowerCase(), tableEntry);
+            tables.push(tableEntry);
+          }
+          
+          // Extract relationships from joins
+          for (const join of (schema.joinMetadata || [])) {
+            if (join.predicate) {
+              const eqMatch = join.predicate.match(/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/);
+              if (eqMatch) {
+                relationships.push({
+                  from: { table: eqMatch[1], column: eqMatch[2] },
+                  to: { table: eqMatch[3], column: eqMatch[4] },
+                  type: 'join',
+                  join_type: join.type,
+                  on_sql: join.predicate
+                });
               }
-            });
-            
-            return validateSchemaResult(result);
+            }
           }
-        } catch (e) {
-          console.error(`Schema analysis attempt ${attempt + 1} failed:`, e);
-          lastError = e;
           
-          if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 500)); // Fast retry (500ms, not seconds)
+          // Add stub tables for dependencies
+          for (const dep of (schema.dependencies || [])) {
+            const depName = dep.split('.').pop();
+            if (!tableMap.has(depName.toLowerCase())) {
+              const stubTable = {
+                id: `table_stub_${stableHash(depName.toLowerCase())}`,
+                name: depName,
+                tableType: 'raw',
+                is_stub: true,
+                schema_source: 'compiler_v2_stub',
+                columns: []
+              };
+              tableMap.set(depName.toLowerCase(), stubTable);
+              tables.push(stubTable);
+            }
           }
+          
+        } catch (e) {
+          console.error(`Error processing ${file.path}:`, e);
         }
       }
       
-      console.error(`Schema batch failed: ${lastError?.message}`);
-      return null;  // Return null instead of showing toast (caller handles aggregation)
+      console.log('V2 Batch schema extraction:', { tables: tables.length, relationships: relationships.length });
+      
+      return validateSchemaResult({ tables, relationships });
     }
     
     // Special version of callOpenAI with higher token limit for schema analysis
