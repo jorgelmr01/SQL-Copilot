@@ -351,13 +351,35 @@
 
   // ============ SCHEMA EXTRACTOR ============
   class SchemaExtractor {
-    constructor() { this.catalog = null; }
+    constructor() { 
+      this.catalog = null; // WarehouseConnector or MockWarehouseConnector
+      this.upstreamSchemas = new Map(); // modelName -> columns (for SELECT * expansion)
+      this.warnings = []; // Track extraction warnings
+    }
+    
     setCatalog(c) { this.catalog = c; }
+    setUpstreamSchemas(schemas) { 
+      this.upstreamSchemas.clear();
+      for (const [name, cols] of Object.entries(schemas)) {
+        this.upstreamSchemas.set(name.toLowerCase(), cols);
+      }
+    }
+    addUpstreamSchema(modelName, columns) {
+      this.upstreamSchemas.set(modelName.toLowerCase(), columns);
+    }
+    getWarnings() { return this.warnings; }
+    clearWarnings() { this.warnings = []; }
 
     extract(ir, modelName, options = {}) {
       const { layer = null, description = null } = options;
+      this.warnings = [];
       const targetTable = ir.targetTable || ir.targetView || { table: modelName };
-      const columns = this.extractColumns(ir);
+      
+      // Build alias-to-table mapping for SELECT * expansion
+      const aliasMap = this.buildAliasMap(ir);
+      
+      // Extract columns with SELECT * expansion
+      const columns = this.extractColumns(ir, aliasMap);
       const isAggregated = ir.groupBy && ir.groupBy.length > 0;
       const grainColumns = isAggregated ? this.extractGrainColumns(ir.groupBy, columns) : this.inferPK(columns);
       const deps = this.extractDeps(ir);
@@ -368,25 +390,241 @@
         id: `model_${this.hash(modelName.toLowerCase())}`, name: targetTable.table || modelName, schema: targetTable.schema || null,
         database: targetTable.database || null, description, layer, columns, grainColumns, isAggregated, dependencies: deps,
         joinMetadata: joinMeta, filters, filtersNormalized: filters.map(f => f.sql), sourceType: ir.type,
-        hasPartialLineage: ir.isPartial || false, extractedAt: new Date().toISOString()
+        hasPartialLineage: ir.isPartial || this.warnings.length > 0, extractedAt: new Date().toISOString(),
+        warnings: this.warnings.length > 0 ? [...this.warnings] : undefined
       };
     }
 
-    extractColumns(ir) {
-      if (!ir.projections) return [];
-      return ir.projections.map((proj, i) => {
-        const expr = proj.expression;
-        const srcCols = proj.sourceColumns || this.extractSrcCols(expr);
-        const typeInfo = this.inferType(expr);
-        const aggInfo = this.detectAgg(expr);
-        const role = this.classifyRole(proj, aggInfo, ir.groupBy);
-        return {
-          id: `col_${this.hash(proj.alias.toLowerCase())}_${i}`, name: proj.alias, type: typeInfo.type, typeConfidence: typeInfo.confidence,
-          expressionIR: expr, expressionSQL: renderExpression(expr), sourceColumns: srcCols, semanticRole: role,
-          aggregationType: aggInfo.type, aggregationDistinct: aggInfo.distinct, nullable: aggInfo.type === AggregationType.COUNT ? false : null,
-          isPK: false, isFK: false, isComputed: expr.type !== ExprType.COLUMN_REF, isPassthrough: srcCols.length === 1 && expr.type === ExprType.COLUMN_REF
-        };
+    // Build mapping of aliases to actual table names
+    buildAliasMap(ir) {
+      const aliasMap = new Map();
+      
+      // From main sources
+      for (const src of (ir.sources || [])) {
+        if (src.type === 'table') {
+          const tableName = src.table;
+          const alias = src.alias || tableName;
+          aliasMap.set(alias.toLowerCase(), tableName.toLowerCase());
+        }
+      }
+      
+      // From joins
+      for (const join of (ir.joins || [])) {
+        if (join.right?.type === 'table') {
+          const tableName = join.right.table;
+          const alias = join.right.alias || tableName;
+          aliasMap.set(alias.toLowerCase(), tableName.toLowerCase());
+        }
+      }
+      
+      // From CTEs
+      if (ir.ctes) {
+        for (const [cteName] of ir.ctes) {
+          aliasMap.set(cteName.toLowerCase(), cteName.toLowerCase());
+        }
+      }
+      
+      return aliasMap;
+    }
+
+    // Expand SELECT * using catalog or upstream schemas
+    async expandStar(tableName, aliasMap) {
+      const resolvedTable = aliasMap.get(tableName?.toLowerCase()) || tableName?.toLowerCase();
+      
+      // Try upstream schemas first (from previously parsed models)
+      if (this.upstreamSchemas.has(resolvedTable)) {
+        const cols = this.upstreamSchemas.get(resolvedTable);
+        return cols.map(c => ({
+          name: c.name,
+          type: c.type || 'VARCHAR',
+          sourceTable: resolvedTable,
+          fromCatalog: false
+        }));
+      }
+      
+      // Try warehouse catalog
+      if (this.catalog) {
+        // Try to find schema.table format
+        const parts = resolvedTable.split('.');
+        const schema = parts.length > 1 ? parts[0] : 'default';
+        const table = parts.length > 1 ? parts[1] : parts[0];
+        
+        const cols = await this.catalog.getTableColumns(schema, table);
+        if (cols && cols.length > 0) {
+          return cols.map(c => ({
+            name: c.name,
+            type: c.type,
+            sourceTable: resolvedTable,
+            fromCatalog: true
+          }));
+        }
+      }
+      
+      // Cannot expand - add warning
+      this.warnings.push({
+        type: 'STAR_NOT_EXPANDED',
+        table: resolvedTable,
+        message: `Could not expand SELECT * for table '${resolvedTable}' - no schema available`
       });
+      
+      return null;
+    }
+
+    extractColumns(ir, aliasMap) {
+      if (!ir.projections) return [];
+      
+      const columns = [];
+      let colIndex = 0;
+      
+      for (const proj of ir.projections) {
+        const expr = proj.expression;
+        
+        // Handle SELECT * and table.*
+        if (expr.type === ExprType.STAR) {
+          const tableName = expr.table;
+          
+          // For now, synchronous fallback - mark as unexpanded
+          // Full async expansion happens in extractAsync()
+          if (tableName) {
+            // table.* - try to expand from upstream schemas
+            const resolvedTable = aliasMap.get(tableName.toLowerCase()) || tableName.toLowerCase();
+            if (this.upstreamSchemas.has(resolvedTable)) {
+              const upstreamCols = this.upstreamSchemas.get(resolvedTable);
+              for (const col of upstreamCols) {
+                columns.push({
+                  id: `col_${this.hash(col.name.toLowerCase())}_${colIndex++}`,
+                  name: col.name,
+                  type: col.type || 'VARCHAR',
+                  typeConfidence: 0.8,
+                  expressionIR: { type: ExprType.COLUMN_REF, table: tableName, column: col.name },
+                  expressionSQL: `${tableName}.${col.name}`,
+                  sourceColumns: [`${resolvedTable}.${col.name}`],
+                  semanticRole: this.classifyRoleByName(col.name),
+                  aggregationType: AggregationType.NONE,
+                  aggregationDistinct: false,
+                  nullable: col.nullable,
+                  isPK: col.isPK || false,
+                  isFK: col.isFK || false,
+                  isComputed: false,
+                  isPassthrough: true,
+                  expandedFrom: `${tableName}.*`
+                });
+              }
+            } else {
+              // Cannot expand - create placeholder
+              this.warnings.push({
+                type: 'STAR_NOT_EXPANDED',
+                table: tableName,
+                message: `Could not expand ${tableName}.* - no upstream schema available`
+              });
+              columns.push({
+                id: `col_star_${tableName}_${colIndex++}`,
+                name: `${tableName}.*`,
+                type: 'UNKNOWN',
+                typeConfidence: 0,
+                expressionIR: expr,
+                expressionSQL: `${tableName}.*`,
+                sourceColumns: [`${tableName}.*`],
+                semanticRole: SemanticRole.UNKNOWN,
+                aggregationType: AggregationType.NONE,
+                nullable: null,
+                isPK: false,
+                isFK: false,
+                isComputed: false,
+                isPassthrough: false,
+                isUnexpandedStar: true
+              });
+            }
+          } else {
+            // SELECT * - expand all tables
+            let expanded = false;
+            for (const [alias, tableName] of aliasMap) {
+              if (this.upstreamSchemas.has(tableName)) {
+                const upstreamCols = this.upstreamSchemas.get(tableName);
+                for (const col of upstreamCols) {
+                  columns.push({
+                    id: `col_${this.hash(col.name.toLowerCase())}_${colIndex++}`,
+                    name: col.name,
+                    type: col.type || 'VARCHAR',
+                    typeConfidence: 0.8,
+                    expressionIR: { type: ExprType.COLUMN_REF, table: alias, column: col.name },
+                    expressionSQL: `${alias}.${col.name}`,
+                    sourceColumns: [`${tableName}.${col.name}`],
+                    semanticRole: this.classifyRoleByName(col.name),
+                    aggregationType: AggregationType.NONE,
+                    nullable: col.nullable,
+                    isPK: col.isPK || false,
+                    isFK: col.isFK || false,
+                    isComputed: false,
+                    isPassthrough: true,
+                    expandedFrom: '*'
+                  });
+                }
+                expanded = true;
+              }
+            }
+            
+            if (!expanded) {
+              this.warnings.push({
+                type: 'STAR_NOT_EXPANDED',
+                table: null,
+                message: 'Could not expand SELECT * - no upstream schemas available'
+              });
+              columns.push({
+                id: `col_star_all_${colIndex++}`,
+                name: '*',
+                type: 'UNKNOWN',
+                typeConfidence: 0,
+                expressionIR: expr,
+                expressionSQL: '*',
+                sourceColumns: ['*'],
+                semanticRole: SemanticRole.UNKNOWN,
+                aggregationType: AggregationType.NONE,
+                nullable: null,
+                isPK: false,
+                isFK: false,
+                isComputed: false,
+                isPassthrough: false,
+                isUnexpandedStar: true
+              });
+            }
+          }
+        } else {
+          // Regular column
+          const srcCols = proj.sourceColumns || this.extractSrcCols(expr);
+          const typeInfo = this.inferType(expr);
+          const aggInfo = this.detectAgg(expr);
+          const role = this.classifyRole(proj, aggInfo, ir.groupBy);
+          
+          columns.push({
+            id: `col_${this.hash(proj.alias.toLowerCase())}_${colIndex++}`,
+            name: proj.alias,
+            type: typeInfo.type,
+            typeConfidence: typeInfo.confidence,
+            expressionIR: expr,
+            expressionSQL: renderExpression(expr),
+            sourceColumns: srcCols,
+            semanticRole: role,
+            aggregationType: aggInfo.type,
+            aggregationDistinct: aggInfo.distinct,
+            nullable: aggInfo.type === AggregationType.COUNT ? false : null,
+            isPK: false,
+            isFK: false,
+            isComputed: expr.type !== ExprType.COLUMN_REF,
+            isPassthrough: srcCols.length === 1 && expr.type === ExprType.COLUMN_REF
+          });
+        }
+      }
+      
+      return columns;
+    }
+    
+    classifyRoleByName(name) {
+      const n = name.toLowerCase();
+      if (n.endsWith('_id') || n === 'id') return SemanticRole.KEY;
+      if (n.endsWith('_at') || n.endsWith('_ts')) return SemanticRole.TIMESTAMP;
+      if (n.endsWith('_amt') || n.endsWith('_count') || n.includes('revenue') || n.includes('total')) return SemanticRole.MEASURE;
+      return SemanticRole.UNKNOWN;
     }
 
     extractSrcCols(expr) {
@@ -521,8 +759,27 @@
 
   // ============ DBT RESOLVER ============
   class DbtResolver {
-    constructor() { this.manifest = null; this.models = new Map(); this.sources = new Map(); }
-    load(manifest) { this.manifest = typeof manifest === 'string' ? JSON.parse(manifest) : manifest; this.indexNodes(); return this; }
+    constructor() { 
+      this.manifest = null; 
+      this.catalog = null;
+      this.models = new Map(); 
+      this.sources = new Map(); 
+      this.columnTypes = new Map(); // modelName -> { colName -> type }
+    }
+    
+    load(manifest) { 
+      this.manifest = typeof manifest === 'string' ? JSON.parse(manifest) : manifest; 
+      this.indexNodes(); 
+      return this; 
+    }
+    
+    // Load dbt catalog.json for column types
+    loadCatalog(catalog) {
+      this.catalog = typeof catalog === 'string' ? JSON.parse(catalog) : catalog;
+      this.indexCatalog();
+      return this;
+    }
+    
     indexNodes() {
       if (!this.manifest?.nodes) return;
       for (const [uid, node] of Object.entries(this.manifest.nodes)) {
@@ -530,20 +787,143 @@
       }
       if (this.manifest.sources) for (const [uid, src] of Object.entries(this.manifest.sources)) this.sources.set(`${src.source_name}.${src.name}`.toLowerCase(), { uniqueId: uid, ...src });
     }
+    
+    // Index catalog for column type lookups
+    indexCatalog() {
+      if (!this.catalog?.nodes) return;
+      
+      for (const [nodeId, node] of Object.entries(this.catalog.nodes)) {
+        if (!node.columns) continue;
+        
+        const modelName = node.metadata?.name?.toLowerCase() || nodeId.split('.').pop().toLowerCase();
+        const colTypes = new Map();
+        
+        for (const [colName, colInfo] of Object.entries(node.columns)) {
+          colTypes.set(colName.toLowerCase(), {
+            name: colName,
+            type: colInfo.type || 'VARCHAR',
+            index: colInfo.index,
+            comment: colInfo.comment,
+            // Additional metadata from catalog
+            stats: node.stats || {}
+          });
+        }
+        
+        this.columnTypes.set(modelName, colTypes);
+      }
+      
+      // Also index sources from catalog
+      if (this.catalog.sources) {
+        for (const [sourceId, source] of Object.entries(this.catalog.sources)) {
+          if (!source.columns) continue;
+          
+          const sourceName = `${source.metadata?.schema || 'default'}.${source.metadata?.name}`.toLowerCase();
+          const colTypes = new Map();
+          
+          for (const [colName, colInfo] of Object.entries(source.columns)) {
+            colTypes.set(colName.toLowerCase(), {
+              name: colName,
+              type: colInfo.type || 'VARCHAR',
+              index: colInfo.index,
+              comment: colInfo.comment
+            });
+          }
+          
+          this.columnTypes.set(sourceName, colTypes);
+        }
+      }
+    }
+    
+    // Get column type from catalog
+    getColumnType(modelName, columnName) {
+      const modelCols = this.columnTypes.get(modelName.toLowerCase());
+      if (!modelCols) return null;
+      return modelCols.get(columnName.toLowerCase())?.type || null;
+    }
+    
+    // Get all columns for a model from catalog
+    getModelColumns(modelName) {
+      const modelCols = this.columnTypes.get(modelName.toLowerCase());
+      if (!modelCols) return null;
+      return Array.from(modelCols.values());
+    }
+    
+    // Check if catalog has column info for a model
+    hasColumnInfo(modelName) {
+      return this.columnTypes.has(modelName.toLowerCase());
+    }
+    
     resolveRef(modelName) {
       const node = this.models.get(modelName.toLowerCase());
       if (!node) return { resolved: false, original: modelName, error: `Model '${modelName}' not found` };
       return { resolved: true, original: modelName, uniqueId: node.uniqueId, schema: node.schema, database: node.database, fqn: this.buildFQN(node) };
     }
+    
     resolveSource(sourceName, tableName) {
       const node = this.sources.get(`${sourceName}.${tableName}`.toLowerCase());
       if (!node) return { resolved: false, original: `${sourceName}.${tableName}`, error: 'Source not found' };
       return { resolved: true, original: `${sourceName}.${tableName}`, uniqueId: node.uniqueId, schema: node.schema, database: node.database, fqn: this.buildFQN(node) };
     }
+    
     buildFQN(node) { const p = []; if (node.database) p.push(node.database); if (node.schema) p.push(node.schema); p.push(node.alias || node.identifier || node.name); return p.join('.'); }
     getCompiledSQL(modelName) { const node = this.models.get(modelName.toLowerCase()); return node?.compiled_code || node?.compiled_sql || null; }
-    getAllModels() { return Array.from(this.models.values()).map(n => ({ name: n.name, uniqueId: n.uniqueId, schema: n.schema, database: n.database, fqn: this.buildFQN(n), tags: n.tags || [], description: n.description || null })); }
+    
+    getAllModels() { 
+      return Array.from(this.models.values()).map(n => ({ 
+        name: n.name, 
+        uniqueId: n.uniqueId, 
+        schema: n.schema, 
+        database: n.database, 
+        fqn: this.buildFQN(n), 
+        tags: n.tags || [], 
+        description: n.description || null,
+        columns: this.getModelColumns(n.name) // Include columns from catalog if available
+      })); 
+    }
+    
+    // Get model with full column info from both manifest and catalog
+    getModelWithColumns(modelName) {
+      const node = this.models.get(modelName.toLowerCase());
+      if (!node) return null;
+      
+      const catalogCols = this.getModelColumns(modelName);
+      const manifestCols = node.columns ? Object.entries(node.columns).map(([name, info]) => ({
+        name,
+        description: info.description,
+        meta: info.meta,
+        tags: info.tags
+      })) : [];
+      
+      // Merge manifest and catalog column info
+      const mergedCols = [];
+      const colMap = new Map();
+      
+      // Start with catalog columns (have types)
+      if (catalogCols) {
+        for (const col of catalogCols) {
+          colMap.set(col.name.toLowerCase(), { ...col });
+        }
+      }
+      
+      // Merge in manifest columns (have descriptions)
+      for (const col of manifestCols) {
+        const existing = colMap.get(col.name.toLowerCase());
+        if (existing) {
+          Object.assign(existing, { description: col.description, meta: col.meta, tags: col.tags });
+        } else {
+          colMap.set(col.name.toLowerCase(), { name: col.name, type: 'VARCHAR', ...col });
+        }
+      }
+      
+      return {
+        ...node,
+        fqn: this.buildFQN(node),
+        columns: Array.from(colMap.values())
+      };
+    }
+    
     isLoaded() { return this.manifest !== null; }
+    isCatalogLoaded() { return this.catalog !== null; }
   }
 
   // ============ SQL PREPROCESSOR ============
@@ -1359,12 +1739,354 @@
     }
   }
 
+  // ============ WAREHOUSE CONNECTOR (Abstract Interface) ============
+  class WarehouseConnector {
+    constructor(config = {}) {
+      this.config = config;
+      this.dialect = config.dialect || 'presto';
+      this.connected = false;
+      this.catalog = new Map(); // schema.table -> columns
+      this.auditLog = [];
+    }
+
+    // Abstract method - override in subclasses
+    async connect() { throw new Error('connect() must be implemented by subclass'); }
+    async disconnect() { this.connected = false; }
+    async executeQuery(sql) { throw new Error('executeQuery() must be implemented by subclass'); }
+
+    // Get columns for a table from information_schema
+    async getTableColumns(schema, table) {
+      const cacheKey = `${schema}.${table}`.toLowerCase();
+      if (this.catalog.has(cacheKey)) {
+        return this.catalog.get(cacheKey);
+      }
+
+      const sql = this.buildColumnsQuery(schema, table);
+      this.logAudit('GET_COLUMNS', { schema, table, sql });
+      
+      try {
+        const rows = await this.executeQuery(sql);
+        const columns = rows.map(r => ({
+          name: r.column_name || r.COLUMN_NAME,
+          type: r.data_type || r.DATA_TYPE,
+          nullable: (r.is_nullable || r.IS_NULLABLE) === 'YES',
+          ordinalPosition: r.ordinal_position || r.ORDINAL_POSITION
+        }));
+        this.catalog.set(cacheKey, columns);
+        return columns;
+      } catch (e) {
+        console.warn(`Failed to get columns for ${schema}.${table}:`, e);
+        return null;
+      }
+    }
+
+    // Get all tables in a schema
+    async getSchemaTables(schema) {
+      const sql = this.buildTablesQuery(schema);
+      this.logAudit('GET_TABLES', { schema, sql });
+      
+      try {
+        const rows = await this.executeQuery(sql);
+        return rows.map(r => r.table_name || r.TABLE_NAME);
+      } catch (e) {
+        console.warn(`Failed to get tables for ${schema}:`, e);
+        return [];
+      }
+    }
+
+    // Build dialect-specific queries
+    buildColumnsQuery(schema, table) {
+      switch (this.dialect) {
+        case 'snowflake':
+          return `SELECT column_name, data_type, is_nullable, ordinal_position 
+                  FROM ${schema}.information_schema.columns 
+                  WHERE table_schema = '${schema}' AND table_name = '${table}' 
+                  ORDER BY ordinal_position`;
+        case 'bigquery':
+          return `SELECT column_name, data_type, is_nullable, ordinal_position 
+                  FROM \`${schema}.INFORMATION_SCHEMA.COLUMNS\` 
+                  WHERE table_name = '${table}' 
+                  ORDER BY ordinal_position`;
+        case 'presto':
+        case 'trino':
+        default:
+          return `SELECT column_name, data_type, is_nullable, ordinal_position 
+                  FROM information_schema.columns 
+                  WHERE table_schema = '${schema}' AND table_name = '${table}' 
+                  ORDER BY ordinal_position`;
+      }
+    }
+
+    buildTablesQuery(schema) {
+      switch (this.dialect) {
+        case 'snowflake':
+          return `SELECT table_name FROM ${schema}.information_schema.tables WHERE table_schema = '${schema}'`;
+        case 'bigquery':
+          return `SELECT table_name FROM \`${schema}.INFORMATION_SCHEMA.TABLES\``;
+        case 'presto':
+        case 'trino':
+        default:
+          return `SELECT table_name FROM information_schema.tables WHERE table_schema = '${schema}'`;
+      }
+    }
+
+    // Audit logging for bank compliance
+    logAudit(action, details) {
+      this.auditLog.push({
+        timestamp: new Date().toISOString(),
+        action,
+        details,
+        user: this.config.user || 'anonymous'
+      });
+    }
+
+    getAuditLog() { return this.auditLog; }
+    clearAuditLog() { this.auditLog = []; }
+
+    // Profiling queries (aggregates only - bank safe)
+    async getColumnUniqueness(schema, table, column) {
+      const sql = `SELECT COUNT(*) as total, COUNT(DISTINCT ${column}) as distinct_count 
+                   FROM ${schema}.${table}`;
+      this.logAudit('PROFILE_UNIQUENESS', { schema, table, column, sql });
+      
+      try {
+        const rows = await this.executeQuery(sql);
+        if (rows.length > 0) {
+          const total = parseInt(rows[0].total || rows[0].TOTAL);
+          const distinct = parseInt(rows[0].distinct_count || rows[0].DISTINCT_COUNT);
+          return { total, distinct, isUnique: total === distinct, uniquenessRatio: distinct / total };
+        }
+      } catch (e) {
+        console.warn(`Failed to profile ${schema}.${table}.${column}:`, e);
+      }
+      return null;
+    }
+
+    async getReferentialIntegrity(factSchema, factTable, factCol, dimSchema, dimTable, dimCol) {
+      const sql = `SELECT COUNT(*) as total, 
+                   SUM(CASE WHEN d.${dimCol} IS NOT NULL THEN 1 ELSE 0 END) as matched
+                   FROM ${factSchema}.${factTable} f
+                   LEFT JOIN ${dimSchema}.${dimTable} d ON f.${factCol} = d.${dimCol}`;
+      this.logAudit('PROFILE_RI', { factSchema, factTable, factCol, dimSchema, dimTable, dimCol, sql });
+      
+      try {
+        const rows = await this.executeQuery(sql);
+        if (rows.length > 0) {
+          const total = parseInt(rows[0].total || rows[0].TOTAL);
+          const matched = parseInt(rows[0].matched || rows[0].MATCHED);
+          return { total, matched, integrityRatio: matched / total };
+        }
+      } catch (e) {
+        console.warn(`Failed to check RI:`, e);
+      }
+      return null;
+    }
+  }
+
+  // Mock connector for testing (no actual warehouse connection)
+  class MockWarehouseConnector extends WarehouseConnector {
+    constructor(config = {}) {
+      super(config);
+      this.mockData = config.mockData || {};
+    }
+
+    async connect() { 
+      this.connected = true; 
+      this.logAudit('CONNECT', { dialect: this.dialect });
+      return true; 
+    }
+
+    async executeQuery(sql) {
+      this.logAudit('EXECUTE', { sql });
+      // Return mock data if available
+      for (const [pattern, data] of Object.entries(this.mockData)) {
+        if (sql.toLowerCase().includes(pattern.toLowerCase())) {
+          return data;
+        }
+      }
+      return [];
+    }
+
+    // Load mock catalog from dbt catalog.json or manual config
+    loadMockCatalog(catalogData) {
+      if (catalogData.nodes) {
+        // dbt catalog.json format
+        for (const [nodeId, node] of Object.entries(catalogData.nodes)) {
+          if (node.columns) {
+            const key = `${node.metadata?.schema || 'default'}.${node.metadata?.name || nodeId}`.toLowerCase();
+            const columns = Object.entries(node.columns).map(([name, col], idx) => ({
+              name: name,
+              type: col.type || 'VARCHAR',
+              nullable: true,
+              ordinalPosition: col.index || idx + 1
+            }));
+            this.catalog.set(key, columns);
+          }
+        }
+      } else {
+        // Simple format: { "schema.table": [{ name, type }] }
+        for (const [key, columns] of Object.entries(catalogData)) {
+          this.catalog.set(key.toLowerCase(), columns);
+        }
+      }
+      this.logAudit('LOAD_CATALOG', { tableCount: this.catalog.size });
+    }
+  }
+
+  // ============ AUDIT LOGGER ============
+  class AuditLogger {
+    constructor(dbName = 'SQLCopilotAuditDB') {
+      this.dbName = dbName;
+      this.dbVersion = 1;
+      this.db = null;
+      this.buffer = [];
+      this.flushInterval = null;
+    }
+
+    async open() {
+      if (this.db) return this.db;
+      
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(this.dbName, this.dbVersion);
+        
+        request.onerror = () => reject(request.error);
+        
+        request.onsuccess = () => {
+          this.db = request.result;
+          // Start periodic flush
+          this.flushInterval = setInterval(() => this.flush(), 5000);
+          resolve(this.db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          
+          if (!db.objectStoreNames.contains('auditLogs')) {
+            const store = db.createObjectStore('auditLogs', { keyPath: 'id', autoIncrement: true });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            store.createIndex('action', 'action', { unique: false });
+            store.createIndex('user', 'user', { unique: false });
+          }
+        };
+      });
+    }
+
+    log(action, details = {}, user = 'anonymous') {
+      const entry = {
+        timestamp: new Date().toISOString(),
+        action,
+        details,
+        user,
+        sessionId: this.getSessionId()
+      };
+      this.buffer.push(entry);
+      
+      // Flush immediately for critical actions
+      if (['SCHEMA_CHANGE', 'EXPORT', 'WAREHOUSE_QUERY'].includes(action)) {
+        this.flush();
+      }
+    }
+
+    async flush() {
+      if (this.buffer.length === 0) return;
+      
+      try {
+        await this.open();
+        const entries = [...this.buffer];
+        this.buffer = [];
+        
+        const tx = this.db.transaction(['auditLogs'], 'readwrite');
+        const store = tx.objectStore('auditLogs');
+        
+        for (const entry of entries) {
+          store.add(entry);
+        }
+        
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (e) {
+        console.warn('Audit flush failed:', e);
+        // Re-add failed entries to buffer
+        this.buffer.unshift(...entries);
+      }
+    }
+
+    async query(filters = {}) {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['auditLogs'], 'readonly');
+        const store = tx.objectStore('auditLogs');
+        const results = [];
+        
+        let request;
+        if (filters.action) {
+          request = store.index('action').openCursor(IDBKeyRange.only(filters.action));
+        } else if (filters.user) {
+          request = store.index('user').openCursor(IDBKeyRange.only(filters.user));
+        } else {
+          request = store.openCursor();
+        }
+        
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            const entry = cursor.value;
+            // Apply date filters
+            if (filters.startDate && entry.timestamp < filters.startDate) {
+              cursor.continue();
+              return;
+            }
+            if (filters.endDate && entry.timestamp > filters.endDate) {
+              cursor.continue();
+              return;
+            }
+            results.push(entry);
+            cursor.continue();
+          } else {
+            resolve(results);
+          }
+        };
+        
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async exportLogs(filters = {}) {
+      const logs = await this.query(filters);
+      this.log('EXPORT_AUDIT_LOGS', { count: logs.length, filters });
+      return logs;
+    }
+
+    getSessionId() {
+      if (!this._sessionId) {
+        this._sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      }
+      return this._sessionId;
+    }
+
+    close() {
+      if (this.flushInterval) {
+        clearInterval(this.flushInterval);
+      }
+      this.flush();
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
+    }
+  }
+
   // ============ GRAPH PERSISTENCE (IndexedDB) ============
   class GraphStorage {
     constructor(dbName = 'SQLCopilotGraphDB') {
       this.dbName = dbName;
-      this.dbVersion = 1;
+      this.dbVersion = 2; // Bumped for new stores
       this.db = null;
+      this.dependencyDAG = new Map(); // model -> Set of downstream models
+      this.reverseDependencyDAG = new Map(); // model -> Set of upstream models
     }
 
     async open() {
@@ -1393,12 +2115,20 @@
           if (!db.objectStoreNames.contains('fileHashes')) {
             const hashStore = db.createObjectStore('fileHashes', { keyPath: 'path' });
             hashStore.createIndex('hash', 'hash', { unique: false });
+            hashStore.createIndex('modelName', 'modelName', { unique: false });
           }
           
           // Store for parsed schemas (cache)
           if (!db.objectStoreNames.contains('schemaCache')) {
             const cacheStore = db.createObjectStore('schemaCache', { keyPath: 'hash' });
             cacheStore.createIndex('modelName', 'modelName', { unique: false });
+          }
+          
+          // Store for dependency DAG (for invalidation)
+          if (!db.objectStoreNames.contains('dependencies')) {
+            const depStore = db.createObjectStore('dependencies', { keyPath: 'modelName' });
+            depStore.createIndex('upstream', 'upstream', { unique: false, multiEntry: true });
+            depStore.createIndex('downstream', 'downstream', { unique: false, multiEntry: true });
           }
         };
       });
@@ -1456,15 +2186,178 @@
       });
     }
 
+    // Save model dependencies for invalidation tracking
+    async saveDependencies(modelName, upstream = [], downstream = []) {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['dependencies'], 'readwrite');
+        const store = tx.objectStore('dependencies');
+        
+        store.put({
+          modelName: modelName.toLowerCase(),
+          upstream: upstream.map(u => u.toLowerCase()),
+          downstream: downstream.map(d => d.toLowerCase()),
+          updatedAt: new Date().toISOString()
+        });
+        
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    // Get all downstream models that depend on a given model
+    async getDownstreamModels(modelName) {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['dependencies'], 'readonly');
+        const store = tx.objectStore('dependencies');
+        const index = store.index('upstream');
+        const results = new Set();
+        
+        const request = index.openCursor(IDBKeyRange.only(modelName.toLowerCase()));
+        
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            results.add(cursor.value.modelName);
+            cursor.continue();
+          } else {
+            resolve(Array.from(results));
+          }
+        };
+        
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    // Get all models that need to be invalidated when a model changes
+    async getInvalidationSet(changedModels) {
+      const invalidated = new Set(changedModels.map(m => m.toLowerCase()));
+      const queue = [...changedModels.map(m => m.toLowerCase())];
+      
+      while (queue.length > 0) {
+        const model = queue.shift();
+        const downstream = await this.getDownstreamModels(model);
+        
+        for (const dep of downstream) {
+          if (!invalidated.has(dep)) {
+            invalidated.add(dep);
+            queue.push(dep);
+          }
+        }
+      }
+      
+      return Array.from(invalidated);
+    }
+
+    // Build dependency DAG from a list of schemas
+    async buildDependencyDAG(schemas) {
+      await this.open();
+      
+      const tx = this.db.transaction(['dependencies'], 'readwrite');
+      const store = tx.objectStore('dependencies');
+      
+      // Build reverse mapping (model -> downstream)
+      const downstreamMap = new Map();
+      
+      for (const schema of schemas) {
+        const modelName = schema.name.toLowerCase();
+        const upstream = (schema.dependencies || []).map(d => d.split('.').pop().toLowerCase());
+        
+        // Track downstream for each upstream
+        for (const up of upstream) {
+          if (!downstreamMap.has(up)) {
+            downstreamMap.set(up, new Set());
+          }
+          downstreamMap.get(up).add(modelName);
+        }
+        
+        // Save this model's upstream dependencies
+        store.put({
+          modelName,
+          upstream,
+          downstream: [], // Will be updated below
+          updatedAt: new Date().toISOString()
+        });
+      }
+      
+      // Update downstream for each model
+      for (const [modelName, downstream] of downstreamMap) {
+        const request = store.get(modelName);
+        request.onsuccess = () => {
+          const record = request.result || { modelName, upstream: [] };
+          record.downstream = Array.from(downstream);
+          record.updatedAt = new Date().toISOString();
+          store.put(record);
+        };
+      }
+      
+      return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    // Check which files have changed and need reprocessing
+    async getChangedFiles(files) {
+      await this.open();
+      
+      const changed = [];
+      const unchanged = [];
+      
+      for (const file of files) {
+        const currentHash = GraphStorage.computeHash(file.content);
+        const storedHash = await this.getFileHash(file.path);
+        
+        if (storedHash !== currentHash) {
+          changed.push({ ...file, hash: currentHash, previousHash: storedHash });
+        } else {
+          unchanged.push({ ...file, hash: currentHash });
+        }
+      }
+      
+      return { changed, unchanged };
+    }
+
+    // Get files that need reprocessing due to dependency invalidation
+    async getFilesToReprocess(files) {
+      const { changed, unchanged } = await this.getChangedFiles(files);
+      
+      // Get model names from changed files
+      const changedModels = changed.map(f => 
+        f.path.split(/[/\\]/).pop().replace(/\.sql$/i, '').toLowerCase()
+      );
+      
+      // Get all invalidated models (changed + downstream)
+      const invalidated = await this.getInvalidationSet(changedModels);
+      
+      // Find unchanged files that are in the invalidation set
+      const invalidatedUnchanged = unchanged.filter(f => {
+        const modelName = f.path.split(/[/\\]/).pop().replace(/\.sql$/i, '').toLowerCase();
+        return invalidated.includes(modelName);
+      });
+      
+      return {
+        changed,
+        invalidated: invalidatedUnchanged,
+        unchanged: unchanged.filter(f => !invalidatedUnchanged.includes(f)),
+        invalidationSet: invalidated
+      };
+    }
+
     async saveFileHash(path, hash, schema) {
       await this.open();
+      
+      const modelName = schema?.name?.toLowerCase() || path.split(/[/\\]/).pop().replace(/\.sql$/i, '').toLowerCase();
       
       return new Promise((resolve, reject) => {
         const tx = this.db.transaction(['fileHashes', 'schemaCache'], 'readwrite');
         
-        // Save file hash
+        // Save file hash with model name for lookup
         const hashStore = tx.objectStore('fileHashes');
-        hashStore.put({ path, hash, updatedAt: new Date().toISOString() });
+        hashStore.put({ path, hash, modelName, updatedAt: new Date().toISOString() });
         
         // Cache parsed schema
         if (schema) {
@@ -1530,7 +2423,8 @@
   global.SQLCopilotV2 = {
     ExprType, JoinType, NodeType, EdgeType, Confidence, SemanticRole, AggregationType,
     SQLParser, renderExpression, SchemaExtractor, DbtResolver, SQLPreprocessor,
-    MetadataGraph, RelationshipInferenceEngine, JoinPathFinder, GraphBuilder, GraphStorage
+    MetadataGraph, RelationshipInferenceEngine, JoinPathFinder, GraphBuilder, GraphStorage,
+    WarehouseConnector, MockWarehouseConnector, AuditLogger
   };
 
 })(typeof window !== 'undefined' ? window : this);

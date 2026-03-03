@@ -2366,6 +2366,11 @@
                     <span class="material-symbols-outlined text-sm">route</span>
                     Join Assistant
                   </button>
+                  <button onclick="showWarningsPanel()" class="px-3 py-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm flex items-center gap-1 transition-colors relative" title="Schema Warnings" id="warnings-toolbar-btn">
+                    <span class="material-symbols-outlined text-sm text-warning">warning</span>
+                    Warnings
+                    <span id="warnings-badge" class="bg-warning text-black text-xs px-1.5 rounded-full font-bold view-hidden">0</span>
+                  </button>
                 </div>
                 <div class="flex items-center gap-2">
                   <input type="text" id="erd-search" placeholder="Search tables..." 
@@ -2765,6 +2770,75 @@
             </div>
             <div class="p-4 border-t border-surface-light flex justify-end gap-2">
               <button onclick="hideJoinAssistant()" class="px-4 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Close</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warnings Panel Modal -->
+        <div id="warnings-panel-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 view-hidden flex items-center justify-center">
+          <div class="bg-surface rounded-2xl w-full max-w-3xl shadow-2xl border border-surface-light max-h-[80vh] flex flex-col">
+            <div class="p-4 border-b border-surface-light flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-warning">warning</span>
+                <h2 class="text-lg font-semibold font-space">Schema Warnings</h2>
+                <span id="warnings-count" class="bg-warning/20 text-warning text-xs px-2 py-0.5 rounded-full">0</span>
+              </div>
+              <button onclick="hideWarningsPanel()" class="p-1 hover:bg-surface-light rounded-lg transition-colors">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+              <!-- Warning Categories -->
+              <div class="space-y-4">
+                <!-- Parse Errors -->
+                <div id="warnings-parse-errors" class="view-hidden">
+                  <h3 class="text-sm font-medium text-red-400 mb-2 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm">error</span>
+                    Parse Errors
+                  </h3>
+                  <div id="warnings-parse-errors-list" class="space-y-2"></div>
+                </div>
+                
+                <!-- Unresolved References -->
+                <div id="warnings-unresolved-refs" class="view-hidden">
+                  <h3 class="text-sm font-medium text-orange-400 mb-2 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm">link_off</span>
+                    Unresolved References
+                  </h3>
+                  <div id="warnings-unresolved-refs-list" class="space-y-2"></div>
+                </div>
+                
+                <!-- Unexpanded SELECT * -->
+                <div id="warnings-unexpanded-star" class="view-hidden">
+                  <h3 class="text-sm font-medium text-yellow-400 mb-2 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm">star</span>
+                    Unexpanded SELECT *
+                  </h3>
+                  <div id="warnings-unexpanded-star-list" class="space-y-2"></div>
+                </div>
+                
+                <!-- Low Confidence Relationships -->
+                <div id="warnings-low-confidence" class="view-hidden">
+                  <h3 class="text-sm font-medium text-blue-400 mb-2 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm">help</span>
+                    Low Confidence Relationships
+                  </h3>
+                  <div id="warnings-low-confidence-list" class="space-y-2"></div>
+                </div>
+                
+                <!-- No Warnings -->
+                <div id="warnings-empty" class="text-center py-8 text-gray-500">
+                  <span class="material-symbols-outlined text-4xl mb-2">check_circle</span>
+                  <p>No warnings found. Schema looks good!</p>
+                </div>
+              </div>
+            </div>
+            <div class="p-4 border-t border-surface-light flex justify-between items-center">
+              <button onclick="exportWarnings()" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">download</span>
+                Export
+              </button>
+              <button onclick="hideWarningsPanel()" class="px-4 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Close</button>
             </div>
           </div>
         </div>
@@ -9200,6 +9274,182 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       });
     }
 
+    // ==================== WARNINGS PANEL ====================
+    let schemaWarnings = {
+      parseErrors: [],
+      unresolvedRefs: [],
+      unexpandedStar: [],
+      lowConfidence: []
+    };
+
+    function showWarningsPanel() {
+      updateWarningsDisplay();
+      document.getElementById('warnings-panel-modal').classList.remove('view-hidden');
+    }
+
+    function hideWarningsPanel() {
+      document.getElementById('warnings-panel-modal').classList.add('view-hidden');
+    }
+
+    function addSchemaWarning(type, warning) {
+      if (type === 'parseError') {
+        schemaWarnings.parseErrors.push(warning);
+      } else if (type === 'unresolvedRef') {
+        schemaWarnings.unresolvedRefs.push(warning);
+      } else if (type === 'unexpandedStar') {
+        schemaWarnings.unexpandedStar.push(warning);
+      } else if (type === 'lowConfidence') {
+        schemaWarnings.lowConfidence.push(warning);
+      }
+      updateWarningsBadge();
+    }
+
+    function clearSchemaWarnings() {
+      schemaWarnings = {
+        parseErrors: [],
+        unresolvedRefs: [],
+        unexpandedStar: [],
+        lowConfidence: []
+      };
+      updateWarningsBadge();
+    }
+
+    function updateWarningsBadge() {
+      const total = schemaWarnings.parseErrors.length + 
+                    schemaWarnings.unresolvedRefs.length + 
+                    schemaWarnings.unexpandedStar.length +
+                    schemaWarnings.lowConfidence.length;
+      
+      const badge = document.getElementById('warnings-badge');
+      const countEl = document.getElementById('warnings-count');
+      
+      if (total > 0) {
+        badge.textContent = total > 99 ? '99+' : total;
+        badge.classList.remove('view-hidden');
+        if (countEl) countEl.textContent = total;
+      } else {
+        badge.classList.add('view-hidden');
+        if (countEl) countEl.textContent = '0';
+      }
+    }
+
+    function updateWarningsDisplay() {
+      const total = schemaWarnings.parseErrors.length + 
+                    schemaWarnings.unresolvedRefs.length + 
+                    schemaWarnings.unexpandedStar.length +
+                    schemaWarnings.lowConfidence.length;
+
+      // Update count
+      document.getElementById('warnings-count').textContent = total;
+
+      // Show/hide empty state
+      document.getElementById('warnings-empty').classList.toggle('view-hidden', total > 0);
+
+      // Parse Errors
+      const parseErrorsSection = document.getElementById('warnings-parse-errors');
+      const parseErrorsList = document.getElementById('warnings-parse-errors-list');
+      if (schemaWarnings.parseErrors.length > 0) {
+        parseErrorsSection.classList.remove('view-hidden');
+        parseErrorsList.innerHTML = schemaWarnings.parseErrors.map(w => `
+          <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1">
+                <div class="font-medium text-sm text-red-300">${escapeHtml(w.model || w.file || 'Unknown')}</div>
+                <div class="text-xs text-gray-400 mt-1">${escapeHtml(w.message || w.error || 'Parse error')}</div>
+                ${w.location ? `<div class="text-xs text-gray-500 mt-1">Line ${w.location.line || '?'}</div>` : ''}
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        parseErrorsSection.classList.add('view-hidden');
+      }
+
+      // Unresolved References
+      const unresolvedSection = document.getElementById('warnings-unresolved-refs');
+      const unresolvedList = document.getElementById('warnings-unresolved-refs-list');
+      if (schemaWarnings.unresolvedRefs.length > 0) {
+        unresolvedSection.classList.remove('view-hidden');
+        unresolvedList.innerHTML = schemaWarnings.unresolvedRefs.map(w => `
+          <div class="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1">
+                <div class="font-medium text-sm text-orange-300 font-mono">${escapeHtml(w.reference || w.table || 'Unknown')}</div>
+                <div class="text-xs text-gray-400 mt-1">Referenced in: ${escapeHtml(w.model || w.file || 'Unknown')}</div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        unresolvedSection.classList.add('view-hidden');
+      }
+
+      // Unexpanded SELECT *
+      const starSection = document.getElementById('warnings-unexpanded-star');
+      const starList = document.getElementById('warnings-unexpanded-star-list');
+      if (schemaWarnings.unexpandedStar.length > 0) {
+        starSection.classList.remove('view-hidden');
+        starList.innerHTML = schemaWarnings.unexpandedStar.map(w => `
+          <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1">
+                <div class="font-medium text-sm text-yellow-300">${escapeHtml(w.model || 'Unknown')}</div>
+                <div class="text-xs text-gray-400 mt-1">${escapeHtml(w.message || `Could not expand ${w.table ? w.table + '.*' : 'SELECT *'}`)}</div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        starSection.classList.add('view-hidden');
+      }
+
+      // Low Confidence Relationships
+      const lowConfSection = document.getElementById('warnings-low-confidence');
+      const lowConfList = document.getElementById('warnings-low-confidence-list');
+      if (schemaWarnings.lowConfidence.length > 0) {
+        lowConfSection.classList.remove('view-hidden');
+        lowConfList.innerHTML = schemaWarnings.lowConfidence.map(w => `
+          <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1">
+                <div class="font-medium text-sm text-blue-300">${escapeHtml(w.from || '?')} → ${escapeHtml(w.to || '?')}</div>
+                <div class="text-xs text-gray-400 mt-1">Confidence: ${(w.confidence * 100).toFixed(0)}% - ${escapeHtml(w.reason || 'Inferred relationship')}</div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        lowConfSection.classList.add('view-hidden');
+      }
+    }
+
+    function exportWarnings() {
+      const data = {
+        exportedAt: new Date().toISOString(),
+        summary: {
+          parseErrors: schemaWarnings.parseErrors.length,
+          unresolvedRefs: schemaWarnings.unresolvedRefs.length,
+          unexpandedStar: schemaWarnings.unexpandedStar.length,
+          lowConfidence: schemaWarnings.lowConfidence.length
+        },
+        warnings: schemaWarnings
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `schema-warnings-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Warnings exported', 'success');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     // ==================== ERD TABLE MERGE ====================
     function showMergeTablesModal() {
       if (ERDState.tables.length < 2) {
@@ -12770,6 +13020,9 @@ If action is unknown, set message to explain what went wrong.`,
       const extractor = new SchemaExtractor();
       const storage = new GraphStorage();
       
+      // Clear previous warnings
+      clearSchemaWarnings();
+      
       // Try to load existing graph for incremental updates
       let graphBuilder;
       try {
@@ -12792,6 +13045,8 @@ If action is unknown, set message to explain what went wrong.`,
       for (const file of sqlFiles) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         
+        const fileName = file.path.split(/[/\\]/).pop().replace(/\.sql$/i, '');
+        
         try {
           // Check if file has changed (incremental update)
           const contentHash = GraphStorage.computeHash(file.content);
@@ -12812,12 +13067,30 @@ If action is unknown, set message to explain what went wrong.`,
           
           if (ir.type === 'ERROR') {
             console.warn(`Parse error in ${file.path}:`, ir.errors);
+            // Add to warnings panel
+            addSchemaWarning('parseError', {
+              model: fileName,
+              file: file.path,
+              message: ir.errors?.[0]?.message || 'Failed to parse SQL',
+              errors: ir.errors
+            });
             continue;
           }
           
-          // Extract model name from file path
-          const fileName = file.path.split(/[/\\]/).pop().replace(/\.sql$/i, '');
+          // Extract schema
           const schema = extractor.extract(ir, fileName, { layer: file.tableType });
+          
+          // Collect extraction warnings
+          const extractorWarnings = extractor.getWarnings();
+          for (const w of extractorWarnings) {
+            if (w.type === 'STAR_NOT_EXPANDED') {
+              addSchemaWarning('unexpandedStar', {
+                model: fileName,
+                table: w.table,
+                message: w.message
+              });
+            }
+          }
           
           // Enrich schema with file metadata
           schema.filePath = file.path;
@@ -12829,6 +13102,9 @@ If action is unknown, set message to explain what went wrong.`,
           parsedSchemas.push(schema);
           filesProcessed++;
           
+          // Add upstream schema for SELECT * expansion in downstream models
+          extractor.addUpstreamSchema(schema.name, schema.columns);
+          
           // Cache the parsed schema
           try {
             await storage.saveFileHash(file.path, contentHash, schema);
@@ -12838,6 +13114,11 @@ If action is unknown, set message to explain what went wrong.`,
           
         } catch (e) {
           console.error(`Error processing ${file.path}:`, e);
+          addSchemaWarning('parseError', {
+            model: fileName,
+            file: file.path,
+            message: e.message || 'Unknown error'
+          });
         }
       }
       
