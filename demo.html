@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQL Copilot v2 - Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f0f1a; color: #e5e7eb; font-family: system-ui, -apple-system, sans-serif; }
+    .code-block { background: #1e1e2e; border-radius: 8px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 13px; overflow-x: auto; }
+    .result-block { background: #1a1a2e; border: 1px solid #3a3a4e; border-radius: 8px; padding: 1rem; }
+    .btn { background: #6366f1; color: white; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+    .btn:hover { background: #4f46e5; }
+    .btn-secondary { background: #3a3a4e; }
+    .btn-secondary:hover { background: #4a4a5e; }
+    textarea { background: #1e1e2e; border: 1px solid #3a3a4e; color: #e5e7eb; border-radius: 8px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+    .tab { padding: 0.5rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab.active { border-bottom-color: #6366f1; color: #6366f1; }
+    .success { color: #22c55e; }
+    .error { color: #ef4444; }
+    .warning { color: #f59e0b; }
+  </style>
+</head>
+<body class="min-h-screen p-8">
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-3xl font-bold mb-2">SQL Copilot v2 - Compiler Pipeline Demo</h1>
+    <p class="text-gray-400 mb-8">Test the new compiler-style SQL parsing, schema extraction, and relationship inference.</p>
+
+    <!-- Tabs -->
+    <div class="flex gap-4 border-b border-gray-700 mb-6">
+      <div class="tab active" onclick="showTab('parser')">SQL Parser</div>
+      <div class="tab" onclick="showTab('dbt')">dbt Integration</div>
+      <div class="tab" onclick="showTab('inference')">Relationship Inference</div>
+      <div class="tab" onclick="showTab('pathfinder')">Join Path Finder</div>
+    </div>
+
+    <!-- Parser Tab -->
+    <div id="tab-parser" class="tab-content">
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Input SQL</h3>
+          <textarea id="sql-input" class="w-full h-64" placeholder="Enter SQL to parse...">WITH monthly_orders AS (
+  SELECT
+    customer_id,
+    DATE_TRUNC('month', order_date) AS order_month,
+    COUNT(*) AS order_count,
+    SUM(total_amount) AS total_revenue
+  FROM orders o
+  LEFT JOIN customers c ON o.customer_id = c.id
+  WHERE order_date >= DATE '2024-01-01'
+  GROUP BY customer_id, DATE_TRUNC('month', order_date)
+)
+SELECT
+  c.customer_name,
+  mo.order_month,
+  mo.order_count,
+  mo.total_revenue,
+  mo.total_revenue / NULLIF(mo.order_count, 0) AS avg_order_value
+FROM monthly_orders mo
+JOIN customers c ON mo.customer_id = c.id
+ORDER BY mo.total_revenue DESC
+LIMIT 100</textarea>
+          <div class="mt-4 flex gap-2">
+            <button class="btn" onclick="parseSQL()">Parse SQL</button>
+            <button class="btn btn-secondary" onclick="extractSchema()">Extract Schema</button>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Result</h3>
+          <div id="parser-result" class="result-block h-80 overflow-auto">
+            <p class="text-gray-500">Results will appear here...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- dbt Tab -->
+    <div id="tab-dbt" class="tab-content hidden">
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Raw SQL with dbt refs</h3>
+          <textarea id="dbt-input" class="w-full h-48">SELECT
+  o.order_id,
+  o.customer_id,
+  c.customer_name,
+  o.total_amount
+FROM {{ ref('stg_orders') }} o
+LEFT JOIN {{ ref('dim_customers') }} c
+  ON o.customer_id = c.customer_id
+WHERE o.order_date >= {{ var('start_date') }}</textarea>
+          
+          <h3 class="text-lg font-semibold mb-2 mt-4">Mock dbt Manifest (simplified)</h3>
+          <textarea id="dbt-manifest" class="w-full h-32">{
+  "nodes": {
+    "model.project.stg_orders": {
+      "name": "stg_orders",
+      "schema": "staging",
+      "database": "analytics"
+    },
+    "model.project.dim_customers": {
+      "name": "dim_customers", 
+      "schema": "gold",
+      "database": "analytics"
+    }
+  }
+}</textarea>
+          <div class="mt-4">
+            <button class="btn" onclick="compileDbt()">Compile with dbt</button>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Compiled SQL</h3>
+          <div id="dbt-result" class="result-block h-80 overflow-auto">
+            <p class="text-gray-500">Compiled SQL will appear here...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inference Tab -->
+    <div id="tab-inference" class="tab-content hidden">
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Sample Models (JSON)</h3>
+          <textarea id="inference-input" class="w-full h-64">[
+  {
+    "name": "fact_orders",
+    "columns": [
+      {"name": "order_id", "type": "BIGINT"},
+      {"name": "customer_id", "type": "BIGINT"},
+      {"name": "product_id", "type": "BIGINT"},
+      {"name": "order_date", "type": "DATE"},
+      {"name": "total_amount", "type": "DECIMAL"}
+    ],
+    "joinMetadata": [
+      {"type": "LEFT", "rightTable": "dim_customers", "predicate": "fact_orders.customer_id = dim_customers.customer_id"}
+    ]
+  },
+  {
+    "name": "dim_customers",
+    "columns": [
+      {"name": "customer_id", "type": "BIGINT", "isPK": true},
+      {"name": "customer_name", "type": "VARCHAR"},
+      {"name": "email", "type": "VARCHAR"}
+    ]
+  },
+  {
+    "name": "dim_products",
+    "columns": [
+      {"name": "product_id", "type": "BIGINT", "isPK": true},
+      {"name": "product_name", "type": "VARCHAR"},
+      {"name": "category", "type": "VARCHAR"}
+    ]
+  }
+]</textarea>
+          <div class="mt-4">
+            <button class="btn" onclick="inferRelationships()">Infer Relationships</button>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Inferred Relationships</h3>
+          <div id="inference-result" class="result-block h-80 overflow-auto">
+            <p class="text-gray-500">Inferred relationships will appear here...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pathfinder Tab -->
+    <div id="tab-pathfinder" class="tab-content hidden">
+      <div class="mb-4">
+        <p class="text-gray-400 mb-4">First, load the sample models from the Inference tab, then find join paths between tables.</p>
+        <div class="flex gap-4 items-center">
+          <div>
+            <label class="text-sm text-gray-400">From Table:</label>
+            <input type="text" id="path-from" value="fact_orders" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 ml-2">
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">To Table:</label>
+            <input type="text" id="path-to" value="dim_products" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 ml-2">
+          </div>
+          <button class="btn" onclick="findJoinPath()">Find Join Path</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Join Paths Found</h3>
+          <div id="path-result" class="result-block h-64 overflow-auto">
+            <p class="text-gray-500">Join paths will appear here...</p>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-2">Generated SQL Skeleton</h3>
+          <div id="path-sql" class="code-block h-64 overflow-auto">
+            <p class="text-gray-500">SQL skeleton will appear here...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="mt-8 p-4 bg-gray-800/50 rounded-lg">
+      <h3 class="text-lg font-semibold mb-2">Graph Statistics</h3>
+      <div id="stats" class="text-sm text-gray-400">
+        No data loaded yet.
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Import modules
+    import { SQLParser, renderExpression } from './src/core/parser/sql-parser.js';
+    import { DbtResolver, SQLPreprocessor } from './src/core/compiler/dbt-resolver.js';
+    import { SchemaExtractor } from './src/core/analyzer/schema-extractor.js';
+    import { MetadataGraph, NodeType, EdgeType } from './src/graph/model.js';
+    import { RelationshipInferenceEngine } from './src/services/inference/relationship-inference.js';
+    import { JoinPathFinder } from './src/graph/pathfinder.js';
+
+    // Initialize components
+    const parser = new SQLParser('presto');
+    const preprocessor = new SQLPreprocessor();
+    const extractor = new SchemaExtractor();
+    const graph = new MetadataGraph();
+    let inference = null;
+    let pathFinder = null;
+
+    // Make functions available globally
+    window.parseSQL = function() {
+      const sql = document.getElementById('sql-input').value;
+      const resultDiv = document.getElementById('parser-result');
+      
+      try {
+        const ir = parser.parse(sql);
+        
+        let html = '<div class="space-y-4">';
+        
+        // Statement type
+        html += `<div><span class="text-gray-400">Type:</span> <span class="text-green-400">${ir.type}</span></div>`;
+        
+        // CTEs
+        if (ir.ctes && ir.ctes.size > 0) {
+          html += '<div><span class="text-gray-400">CTEs:</span>';
+          html += '<ul class="ml-4 mt-1">';
+          for (const [name, cte] of ir.ctes) {
+            html += `<li class="text-blue-400">• ${name}</li>`;
+          }
+          html += '</ul></div>';
+        }
+        
+        // Projections
+        if (ir.projections && ir.projections.length > 0) {
+          html += '<div><span class="text-gray-400">Output Columns:</span>';
+          html += '<ul class="ml-4 mt-1">';
+          for (const proj of ir.projections) {
+            const sources = proj.sourceColumns.join(', ') || 'computed';
+            html += `<li><span class="text-yellow-400">${proj.alias}</span> <span class="text-gray-500">← ${sources}</span></li>`;
+          }
+          html += '</ul></div>';
+        }
+        
+        // Sources
+        if (ir.sources && ir.sources.length > 0) {
+          html += '<div><span class="text-gray-400">Source Tables:</span>';
+          html += '<ul class="ml-4 mt-1">';
+          for (const src of ir.sources) {
+            const alias = src.alias ? ` AS ${src.alias}` : '';
+            html += `<li class="text-cyan-400">• ${src.table}${alias}</li>`;
+          }
+          html += '</ul></div>';
+        }
+        
+        // Joins
+        if (ir.joins && ir.joins.length > 0) {
+          html += '<div><span class="text-gray-400">Joins:</span>';
+          html += '<ul class="ml-4 mt-1">';
+          for (const join of ir.joins) {
+            const table = join.right?.table || 'subquery';
+            html += `<li><span class="text-purple-400">${join.type} JOIN</span> ${table}</li>`;
+          }
+          html += '</ul></div>';
+        }
+        
+        // Group By
+        if (ir.groupBy && ir.groupBy.length > 0) {
+          html += `<div><span class="text-gray-400">GROUP BY:</span> <span class="text-orange-400">${ir.groupBy.length} columns</span></div>`;
+        }
+        
+        // Errors/Warnings
+        if (ir.errors && ir.errors.length > 0) {
+          html += '<div class="error">Errors: ' + ir.errors.map(e => e.message).join(', ') + '</div>';
+        }
+        
+        html += '</div>';
+        
+        // Raw IR (collapsible)
+        html += '<details class="mt-4"><summary class="cursor-pointer text-gray-400">Show Raw IR</summary>';
+        html += '<pre class="code-block mt-2 text-xs">' + JSON.stringify(ir, (key, value) => {
+          if (value instanceof Map) return Object.fromEntries(value);
+          return value;
+        }, 2) + '</pre></details>';
+        
+        resultDiv.innerHTML = html;
+        
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="error">Parse Error: ${error.message}</div>`;
+      }
+    };
+
+    window.extractSchema = function() {
+      const sql = document.getElementById('sql-input').value;
+      const resultDiv = document.getElementById('parser-result');
+      
+      try {
+        const ir = parser.parse(sql);
+        const schema = extractor.extract(ir, 'query_result', { layer: 'gold' });
+        
+        let html = '<div class="space-y-4">';
+        
+        html += `<div><span class="text-gray-400">Model:</span> <span class="text-green-400">${schema.name}</span></div>`;
+        html += `<div><span class="text-gray-400">Layer:</span> <span class="text-yellow-400">${schema.layer || 'unknown'}</span></div>`;
+        html += `<div><span class="text-gray-400">Aggregated:</span> <span class="${schema.isAggregated ? 'text-orange-400' : 'text-gray-500'}">${schema.isAggregated}</span></div>`;
+        
+        if (schema.grainColumns && schema.grainColumns.length > 0) {
+          html += `<div><span class="text-gray-400">Grain:</span> <span class="text-purple-400">${schema.grainColumns.join(', ')}</span></div>`;
+        }
+        
+        html += '<div><span class="text-gray-400">Columns:</span>';
+        html += '<table class="ml-4 mt-2 text-sm w-full">';
+        html += '<tr class="text-gray-500"><th class="text-left pr-4">Name</th><th class="text-left pr-4">Type</th><th class="text-left pr-4">Role</th><th class="text-left">Agg</th></tr>';
+        for (const col of schema.columns) {
+          const roleClass = col.semanticRole === 'measure' ? 'text-purple-400' : col.semanticRole === 'dimension' ? 'text-blue-400' : 'text-gray-400';
+          html += `<tr>
+            <td class="text-yellow-400 pr-4">${col.name}</td>
+            <td class="text-cyan-400 pr-4">${col.type}</td>
+            <td class="${roleClass} pr-4">${col.semanticRole}</td>
+            <td class="text-orange-400">${col.aggregationType !== 'none' ? col.aggregationType : '-'}</td>
+          </tr>`;
+        }
+        html += '</table></div>';
+        
+        if (schema.dependencies && schema.dependencies.length > 0) {
+          html += `<div><span class="text-gray-400">Dependencies:</span> <span class="text-cyan-400">${schema.dependencies.join(', ')}</span></div>`;
+        }
+        
+        html += '</div>';
+        
+        resultDiv.innerHTML = html;
+        
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="error">Extraction Error: ${error.message}</div>`;
+      }
+    };
+
+    window.compileDbt = function() {
+      const sql = document.getElementById('dbt-input').value;
+      const manifestJson = document.getElementById('dbt-manifest').value;
+      const resultDiv = document.getElementById('dbt-result');
+      
+      try {
+        // Parse manifest
+        const manifest = JSON.parse(manifestJson);
+        
+        // Create resolver and load manifest
+        const resolver = new DbtResolver();
+        resolver.load(manifest);
+        
+        // Set up preprocessor
+        preprocessor.setDbtResolver(resolver);
+        preprocessor.setVariables({ start_date: "'2024-01-01'" });
+        
+        // Compile
+        const result = preprocessor.compile(sql);
+        
+        let html = '<div class="space-y-4">';
+        
+        html += '<div><span class="text-gray-400">Compiled SQL:</span></div>';
+        html += `<pre class="code-block">${result.compiledSQL}</pre>`;
+        
+        if (result.refs && result.refs.length > 0) {
+          html += '<div class="mt-4"><span class="text-gray-400">Resolved refs:</span>';
+          html += '<ul class="ml-4 mt-1">';
+          for (const ref of result.refs) {
+            const status = ref.resolved ? '✓' : '✗';
+            const statusClass = ref.resolved ? 'success' : 'error';
+            html += `<li><span class="${statusClass}">${status}</span> ${ref.original} → ${ref.fqn || ref.error}</li>`;
+          }
+          html += '</ul></div>';
+        }
+        
+        if (result.isPartial) {
+          html += '<div class="warning mt-2">⚠ Partial lineage: Some Jinja blocks could not be fully resolved</div>';
+        }
+        
+        html += '</div>';
+        
+        resultDiv.innerHTML = html;
+        
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="error">Compilation Error: ${error.message}</div>`;
+      }
+    };
+
+    window.inferRelationships = function() {
+      const modelsJson = document.getElementById('inference-input').value;
+      const resultDiv = document.getElementById('inference-result');
+      
+      try {
+        const models = JSON.parse(modelsJson);
+        
+        // Clear and rebuild graph
+        graph.clear();
+        
+        // Add models to graph
+        for (const model of models) {
+          const modelId = `model_${model.name}`;
+          graph.addNode(modelId, NodeType.MODEL, {
+            name: model.name,
+            layer: model.layer
+          });
+          
+          for (const col of model.columns) {
+            const colId = `${modelId}_col_${col.name}`;
+            graph.addNode(colId, NodeType.COLUMN, {
+              name: col.name,
+              modelId: modelId,
+              type: col.type,
+              isPK: col.isPK
+            });
+            graph.addEdge(modelId, colId, EdgeType.PRODUCES);
+          }
+        }
+        
+        // Run inference
+        inference = new RelationshipInferenceEngine(graph);
+        inference.inferRelationships(models).then(candidates => {
+          let html = '<div class="space-y-4">';
+          
+          if (candidates.length === 0) {
+            html += '<p class="text-gray-500">No relationships inferred.</p>';
+          } else {
+            html += `<p class="text-green-400">Found ${candidates.length} relationship(s):</p>`;
+            html += '<div class="space-y-2 mt-2">';
+            
+            for (const c of candidates) {
+              const confClass = c.confidence >= 0.7 ? 'success' : c.confidence >= 0.4 ? 'warning' : 'text-gray-400';
+              const confPct = (c.confidence * 100).toFixed(0);
+              
+              html += `<div class="bg-gray-800 rounded p-3">
+                <div class="flex justify-between">
+                  <span><span class="text-yellow-400">${c.from.table}.${c.from.column}</span> → <span class="text-cyan-400">${c.to.table}.${c.to.column}</span></span>
+                  <span class="${confClass}">${confPct}%</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">${c.explanation || c.strategy}</div>
+              </div>`;
+            }
+            
+            html += '</div>';
+          }
+          
+          html += '</div>';
+          resultDiv.innerHTML = html;
+          
+          // Update stats
+          updateStats();
+        });
+        
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="error">Inference Error: ${error.message}</div>`;
+      }
+    };
+
+    window.findJoinPath = function() {
+      const fromTable = document.getElementById('path-from').value;
+      const toTable = document.getElementById('path-to').value;
+      const resultDiv = document.getElementById('path-result');
+      const sqlDiv = document.getElementById('path-sql');
+      
+      try {
+        if (!pathFinder) {
+          pathFinder = new JoinPathFinder(graph);
+        }
+        
+        const paths = pathFinder.findPaths(fromTable, toTable, { maxHops: 5 });
+        
+        if (paths.length === 0) {
+          resultDiv.innerHTML = '<p class="text-gray-500">No join path found. Make sure models are loaded from the Inference tab.</p>';
+          sqlDiv.innerHTML = '<p class="text-gray-500">No SQL generated.</p>';
+          return;
+        }
+        
+        let html = `<p class="text-green-400 mb-2">Found ${paths.length} path(s):</p>`;
+        
+        for (let i = 0; i < paths.length; i++) {
+          const path = paths[i];
+          const scorePct = (path.score * 100).toFixed(0);
+          
+          html += `<div class="bg-gray-800 rounded p-3 mb-2">
+            <div class="flex justify-between mb-1">
+              <span class="text-yellow-400">Path ${i + 1}</span>
+              <span class="text-gray-400">${path.hops} hop(s), score: ${scorePct}%</span>
+            </div>
+            <div class="text-sm">${path.tables.join(' → ')}</div>
+          </div>`;
+        }
+        
+        resultDiv.innerHTML = html;
+        
+        // Generate SQL for best path
+        const bestPath = paths[0];
+        const sql = bestPath.toSQL('LEFT', { includeColumns: true });
+        sqlDiv.innerHTML = `<pre>${sql}</pre>`;
+        
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="error">Pathfinding Error: ${error.message}</div>`;
+      }
+    };
+
+    window.showTab = function(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+      
+      // Show selected tab
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      event.target.classList.add('active');
+    };
+
+    function updateStats() {
+      const stats = graph.getStats();
+      const statsDiv = document.getElementById('stats');
+      
+      statsDiv.innerHTML = `
+        <div class="grid grid-cols-4 gap-4">
+          <div><span class="text-gray-500">Total Nodes:</span> <span class="text-white">${stats.totalNodes}</span></div>
+          <div><span class="text-gray-500">Total Edges:</span> <span class="text-white">${stats.totalEdges}</span></div>
+          <div><span class="text-gray-500">Models:</span> <span class="text-white">${stats.nodesByType.model || 0}</span></div>
+          <div><span class="text-gray-500">Columns:</span> <span class="text-white">${stats.nodesByType.column || 0}</span></div>
+        </div>
+      `;
+    }
+
+    // Initialize
+    updateStats();
+  </script>
+</body>
+</html>
