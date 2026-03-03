@@ -13114,10 +13114,6 @@ If action is unknown, set message to explain what went wrong.`,
           // Extract schema
           const schema = extractor.extract(ir, fileName, { layer: file.tableType });
           
-          // Debug: log extracted columns
-          console.log(`[V2 Debug] ${fileName}: extracted ${schema.columns?.length || 0} columns`, 
-            schema.columns?.slice(0, 3).map(c => c.name));
-          
           // Collect extraction warnings
           const extractorWarnings = extractor.getWarnings();
           for (const w of extractorWarnings) {
@@ -13183,13 +13179,10 @@ If action is unknown, set message to explain what went wrong.`,
       // Store graph builder globally for lineage queries and join assistant
       window.SQLCopilotGraph = graphBuilder;
       
-      console.log('V2 Batch schema extraction:', { 
-        tables: erdData.tables.length, 
-        relationships: erdData.relationships.length,
-        filesProcessed,
-        filesSkipped,
-        graphStats: graphBuilder.getGraph().getStats()
-      });
+      // Log summary for debugging if needed
+      if (filesProcessed > 0) {
+        console.log(`Schema extracted: ${erdData.tables.length} tables, ${erdData.relationships.length} relationships`);
+      }
       
       return validateSchemaResult(erdData);
     }
