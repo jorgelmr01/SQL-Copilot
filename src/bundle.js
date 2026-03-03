@@ -1355,7 +1355,8 @@
           grainColumns: schema.grainColumns || [],
           isStub: schema.is_stub || false,
           sourceType: schema.sourceType,
-          filePath: schema.filePath
+          filePath: schema.filePath,
+          columns: schema.columns || [] // Store columns directly on model node as backup
         });
       } else {
         this.graph.updateNode(modelId, {
@@ -1363,14 +1364,16 @@
           description: schema.description,
           isAggregated: schema.isAggregated,
           grainColumns: schema.grainColumns || [],
-          isStub: schema.is_stub || false
+          isStub: schema.is_stub || false,
+          columns: schema.columns || [] // Update columns
         });
       }
       
       this.modelIndex.set(schema.name.toLowerCase(), modelId);
       
-      // Add columns
-      for (const col of (schema.columns || [])) {
+      // Add columns as separate nodes in the graph
+      const cols = schema.columns || [];
+      for (const col of cols) {
         this.addColumn(modelId, schema.name, col);
       }
       
@@ -1525,7 +1528,8 @@
       
       // Convert model nodes to tables
       for (const model of this.graph.getNodesByType(NodeType.MODEL)) {
-        const columns = this.graph.getColumnsForModel(model.id).map(col => ({
+        // Get columns from graph index
+        let columns = this.graph.getColumnsForModel(model.id).map(col => ({
           id: col.id,
           name: col.name,
           type: col.type || 'VARCHAR',
@@ -1539,6 +1543,24 @@
           nullable: col.nullable,
           is_grain: col.isGrain
         }));
+        
+        // Fallback: if no columns from graph, check if model has columns property directly
+        if (columns.length === 0 && model.columns && model.columns.length > 0) {
+          columns = model.columns.map(col => ({
+            id: col.id || `col_${model.id}_${col.name}`,
+            name: col.name,
+            type: col.type || 'VARCHAR',
+            type_confidence: col.typeConfidence || col.type_confidence,
+            semantic_role: col.semanticRole || col.semantic_role,
+            aggregation_type: col.aggregationType || col.aggregation_type,
+            expression_sql: col.expressionSQL || col.expression_sql,
+            source_columns: col.sourceColumns || col.source_columns,
+            isPK: col.isPK,
+            isFK: col.isFK,
+            nullable: col.nullable,
+            is_grain: col.isGrain || col.is_grain
+          }));
+        }
         
         tables.push({
           id: model.id,

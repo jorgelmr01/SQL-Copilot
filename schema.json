@@ -1,0 +1,355 @@
+{
+  "tables": [
+    {
+      "id": "table_5oo5o7",
+      "name": "Untitled-1",
+      "tableType": "raw",
+      "schema_source": "compiler_v2",
+      "is_stub": false,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 100,
+      "y": 100,
+      "columns": [],
+      "description": "Extracted from Untitled-1.sql"
+    },
+    {
+      "id": "table_m067xn",
+      "name": "customer_logins",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 350,
+      "y": 100,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_htz0ki",
+      "name": "dim_customers",
+      "tableType": "raw",
+      "schema_source": "compiler_v2",
+      "is_stub": false,
+      "is_aggregated": false,
+      "grain_columns": [
+        "customer_id"
+      ],
+      "x": 600,
+      "y": 100,
+      "columns": [],
+      "description": "Extracted from 01_customers.sql"
+    },
+    {
+      "id": "table_uvxrwk",
+      "name": "stg_customers",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 850,
+      "y": 100,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_rydfbd",
+      "name": "stg_addresses",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 100,
+      "y": 300,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_lzjenc",
+      "name": "fact_orders",
+      "tableType": "raw",
+      "schema_source": "compiler_v2",
+      "is_stub": false,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 350,
+      "y": 300,
+      "columns": [],
+      "description": "Extracted from 02_orders.sql"
+    },
+    {
+      "id": "table_80r9y6",
+      "name": "stg_orders",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 600,
+      "y": 300,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_wa2ve",
+      "name": "stg_order_items",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 850,
+      "y": 300,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_4j7hf",
+      "name": "stg_products",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 100,
+      "y": 500,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_qdplwg",
+      "name": "03_products",
+      "tableType": "raw",
+      "schema_source": "compiler_v2",
+      "is_stub": false,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 350,
+      "y": 500,
+      "columns": [],
+      "description": "Extracted from 03_products.sql"
+    },
+    {
+      "id": "table_glm36k",
+      "name": "products",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 600,
+      "y": 500,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_nzbb7c",
+      "name": "04_sales_summary",
+      "tableType": "raw",
+      "schema_source": "compiler_v2",
+      "is_stub": false,
+      "is_aggregated": true,
+      "grain_columns": [
+        "1",
+        "2",
+        "3"
+      ],
+      "x": 850,
+      "y": 500,
+      "columns": [],
+      "description": "Extracted from 04_sales_summary.sql"
+    },
+    {
+      "id": "table_802099",
+      "name": "dim_categories",
+      "tableType": "raw",
+      "schema_source": "compiler_v2",
+      "is_stub": false,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 100,
+      "y": 700,
+      "columns": [],
+      "description": "Extracted from 05_categories.sql"
+    },
+    {
+      "id": "table_lfwun0",
+      "name": "categories",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 350,
+      "y": 700,
+      "columns": [],
+      "description": ""
+    },
+    {
+      "id": "table_htrhmm",
+      "name": "06_customer_orders_cte",
+      "tableType": "raw",
+      "schema_source": "compiler_v2",
+      "is_stub": false,
+      "is_aggregated": false,
+      "grain_columns": [
+        "customer_id"
+      ],
+      "x": 600,
+      "y": 700,
+      "columns": [],
+      "description": "Extracted from 06_customer_orders_cte.sql"
+    },
+    {
+      "id": "table_yfxc69",
+      "name": "customer_segments",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 850,
+      "y": 700,
+      "columns": [],
+      "description": ""
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel_n2ctr5",
+      "from": {
+        "table": "dim_customers",
+        "column": "customer_id"
+      },
+      "to": {
+        "table": "stg_addresses",
+        "column": "customer_id"
+      },
+      "type": "join",
+      "join_type": "LEFT",
+      "on_sql": "c.customer_id = a.customer_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_c4lf8",
+      "from": {
+        "table": "fact_orders",
+        "column": "order_id"
+      },
+      "to": {
+        "table": "stg_order_items",
+        "column": "order_id"
+      },
+      "type": "join",
+      "join_type": "INNER",
+      "on_sql": "o.order_id = oi.order_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_qsiws5",
+      "from": {
+        "table": "fact_orders",
+        "column": "product_id"
+      },
+      "to": {
+        "table": "stg_products",
+        "column": "product_id"
+      },
+      "type": "join",
+      "join_type": "LEFT",
+      "on_sql": "oi.product_id = p.product_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_o8npww",
+      "from": {
+        "table": "04_sales_summary",
+        "column": "customer_id"
+      },
+      "to": {
+        "table": "dim_customers",
+        "column": "customer_id"
+      },
+      "type": "join",
+      "join_type": "LEFT",
+      "on_sql": "o.customer_id = c.customer_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_w3cvpn",
+      "from": {
+        "table": "04_sales_summary",
+        "column": "product_id"
+      },
+      "to": {
+        "table": "stg_products",
+        "column": "product_id"
+      },
+      "type": "join",
+      "join_type": "LEFT",
+      "on_sql": "o.product_id = p.product_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_rlwi1m",
+      "from": {
+        "table": "dim_categories",
+        "column": "parent_category_id"
+      },
+      "to": {
+        "table": "categories",
+        "column": "category_id"
+      },
+      "type": "join",
+      "join_type": "LEFT",
+      "on_sql": "cat.parent_category_id = parent.category_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_h32lfn",
+      "from": {
+        "table": "06_customer_orders_cte",
+        "column": "customer_id"
+      },
+      "to": {
+        "table": "customer_segments",
+        "column": "customer_id"
+      },
+      "type": "join",
+      "join_type": "INNER",
+      "on_sql": "c.customer_id = cs.customer_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    }
+  ]
+}

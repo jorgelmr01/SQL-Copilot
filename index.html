@@ -13080,6 +13080,10 @@ If action is unknown, set message to explain what went wrong.`,
           // Extract schema
           const schema = extractor.extract(ir, fileName, { layer: file.tableType });
           
+          // Debug: log extracted columns
+          console.log(`[V2 Debug] ${fileName}: extracted ${schema.columns?.length || 0} columns`, 
+            schema.columns?.slice(0, 3).map(c => c.name));
+          
           // Collect extraction warnings
           const extractorWarnings = extractor.getWarnings();
           for (const w of extractorWarnings) {
