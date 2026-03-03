@@ -8426,7 +8426,9 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         const columnHeight = 24;
         const headerHeight = 32;
         const width = 200;
-        const height = headerHeight + table.columns.length * columnHeight + 8;
+        // Minimum height for stub tables with no columns
+        const minBodyHeight = table.is_stub && (!table.columns || table.columns.length === 0) ? 32 : 0;
+        const height = headerHeight + Math.max(table.columns.length * columnHeight, minBodyHeight) + 8;
 
         // Table background
         g.append('rect')
@@ -8540,6 +8542,18 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
           .text('✎')
           .style('pointer-events', 'none');
 
+        // Show placeholder for stub tables with no columns
+        if (table.is_stub && (!table.columns || table.columns.length === 0)) {
+          g.append('text')
+            .attr('x', width / 2)
+            .attr('y', headerHeight + 20)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#6b7280')
+            .attr('font-size', '11px')
+            .attr('font-style', 'italic')
+            .text('External source');
+        }
+
         // Columns
         table.columns.forEach((col, i) => {
           const y = headerHeight + i * columnHeight + 4;
@@ -8616,28 +8630,28 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
 
         let sourceX, sourceY, targetX, targetY;
         
-        // Handle lineage relationships (table-to-table, no columns)
-        if (rel.type === 'lineage') {
-          // Connect from center-right of source to center-left of target
-          const sourceTableHeight = 32 + (sourceTable.columns?.length || 1) * 24;
-          const targetTableHeight = 32 + (targetTable.columns?.length || 1) * 24;
-          
-          sourceX = (sourceTable.x || 0) + 200;
-          sourceY = (sourceTable.y || 0) + sourceTableHeight / 2;
-          targetX = targetTable.x || 0;
-          targetY = (targetTable.y || 0) + targetTableHeight / 2;
-        } else {
-          // FK or join_condition relationships require columns
-          const sourceColIndex = sourceTable.columns?.findIndex(c => c.name === rel.from.column);
-          const targetColIndex = targetTable.columns?.findIndex(c => c.name === rel.to.column);
-
-          if (sourceColIndex === -1 || sourceColIndex === undefined || 
-              targetColIndex === -1 || targetColIndex === undefined) return;
-
-          sourceX = (sourceTable.x || 0) + 200;
+        // Calculate table heights
+        const sourceTableHeight = 32 + Math.max((sourceTable.columns?.length || 0), 1) * 24 + 8;
+        const targetTableHeight = 32 + Math.max((targetTable.columns?.length || 0), 1) * 24 + 8;
+        
+        // Try to find column positions, fall back to table center if not found
+        const sourceColIndex = sourceTable.columns?.findIndex(c => c.name === rel.from.column);
+        const targetColIndex = targetTable.columns?.findIndex(c => c.name === rel.to.column);
+        
+        // Source position - use column if found, otherwise center of table
+        sourceX = (sourceTable.x || 0) + 200;
+        if (sourceColIndex !== undefined && sourceColIndex >= 0) {
           sourceY = (sourceTable.y || 0) + 32 + sourceColIndex * 24 + 16;
-          targetX = targetTable.x || 0;
+        } else {
+          sourceY = (sourceTable.y || 0) + sourceTableHeight / 2;
+        }
+        
+        // Target position - use column if found, otherwise center of table
+        targetX = targetTable.x || 0;
+        if (targetColIndex !== undefined && targetColIndex >= 0) {
           targetY = (targetTable.y || 0) + 32 + targetColIndex * 24 + 16;
+        } else {
+          targetY = (targetTable.y || 0) + targetTableHeight / 2;
         }
 
         // Draw curved line
@@ -8655,11 +8669,9 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
           lineClass += ' selected';
         }
 
-        // Determine marker based on type
+        // Determine marker based on cardinality
         let marker = 'url(#arrow-many)';
-        if (rel.type === 'one-to-one') marker = 'url(#arrow-one)';
-        if (rel.type === 'lineage') marker = 'url(#arrow-many)'; // Lineage uses flow arrow
-        if (rel.type === 'join') marker = 'url(#arrow-many)'; // Join uses connection arrow
+        if (rel.cardinality === 'one-to-one') marker = 'url(#arrow-one)';
 
         graph.append('path')
           .attr('class', lineClass)
@@ -8667,10 +8679,8 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
           .attr('marker-end', marker)
           .on('click', () => selectRelationship(rel.id));
 
-        // Relationship label
-        const labelText = rel.label || (rel.type === 'lineage' ? 'depends on' : 
-                                        (rel.type === 'join_condition' || rel.type === 'join') ? 
-                                        (rel.join_type || 'joins') : '');
+        // Relationship label - show join type
+        const labelText = rel.label || rel.join_type || '';
         if (labelText) {
           graph.append('text')
             .attr('class', 'erd-relationship-label')
