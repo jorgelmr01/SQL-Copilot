@@ -23,14 +23,143 @@
       this.errors = [];
       try {
         const n = this.normalize(sql);
-        const ir = n.toUpperCase().startsWith('CREATE TABLE') && n.toUpperCase().includes(' AS ') 
-          ? this.parseCTAS(n) : this.parseSelect(n);
+        const upper = n.toUpperCase();
+        
+        // Detect statement type
+        let ir;
+        if (upper.startsWith('CREATE TABLE') && upper.includes(' AS ')) {
+          ir = this.parseCTAS(n);
+        } else if (upper.startsWith('CREATE TABLE') || upper.startsWith('CREATE EXTERNAL TABLE')) {
+          ir = this.parseDDL(n);
+        } else if (upper.startsWith('CREATE VIEW') || upper.startsWith('CREATE OR REPLACE VIEW')) {
+          ir = this.parseCreateView(n);
+        } else {
+          ir = this.parseSelect(n);
+        }
+        
         ir.originalSQL = sql; ir.dialect = this.dialect; ir.errors = this.errors;
         return ir;
       } catch (e) {
         this.errors.push({ type: 'PARSE_ERROR', message: e.message });
         return { type: 'ERROR', originalSQL: sql, errors: this.errors };
       }
+    }
+    
+    // Parse CREATE TABLE DDL (not CTAS)
+    parseDDL(sql) {
+      const ir = { 
+        type: 'DDL', 
+        targetTable: null, 
+        columns: [], 
+        constraints: { primaryKey: [], uniqueKeys: [], foreignKeys: [] }
+      };
+      
+      // Extract table name
+      const tableMatch = sql.match(/CREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)/i);
+      if (tableMatch) {
+        ir.targetTable = this.parseTableName(tableMatch[1]);
+      }
+      
+      // Extract column definitions and constraints from parentheses
+      const colsMatch = sql.match(/\(([^)]+(?:\([^)]*\)[^)]*)*)\)/);
+      if (colsMatch) {
+        const colDefs = this.splitColumnDefs(colsMatch[1]);
+        
+        for (const def of colDefs) {
+          const trimmed = def.trim();
+          const upper = trimmed.toUpperCase();
+          
+          // Check for table-level constraints
+          if (upper.startsWith('PRIMARY KEY')) {
+            const pkMatch = trimmed.match(/PRIMARY\s+KEY\s*\(([^)]+)\)/i);
+            if (pkMatch) {
+              ir.constraints.primaryKey = pkMatch[1].split(',').map(c => c.trim());
+            }
+          } else if (upper.startsWith('UNIQUE')) {
+            const ukMatch = trimmed.match(/UNIQUE\s*\(([^)]+)\)/i);
+            if (ukMatch) {
+              ir.constraints.uniqueKeys.push(ukMatch[1].split(',').map(c => c.trim()));
+            }
+          } else if (upper.startsWith('FOREIGN KEY') || upper.startsWith('CONSTRAINT')) {
+            const fkMatch = trimmed.match(/FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(]+)\s*\(([^)]+)\)/i);
+            if (fkMatch) {
+              ir.constraints.foreignKeys.push({
+                columns: fkMatch[1].split(',').map(c => c.trim()),
+                refTable: fkMatch[2],
+                refColumns: fkMatch[3].split(',').map(c => c.trim())
+              });
+            }
+          } else {
+            // Parse column definition
+            const col = this.parseColumnDef(trimmed);
+            if (col) ir.columns.push(col);
+          }
+        }
+      }
+      
+      return ir;
+    }
+    
+    parseColumnDef(def) {
+      // Match: column_name TYPE [constraints...]
+      const match = def.match(/^(\w+)\s+(\w+(?:\([^)]+\))?)\s*(.*)?$/i);
+      if (!match) return null;
+      
+      const col = {
+        name: match[1],
+        type: match[2].toUpperCase(),
+        isPK: false,
+        isFK: false,
+        nullable: true,
+        unique: false,
+        defaultValue: null,
+        references: null
+      };
+      
+      const constraints = (match[3] || '').toUpperCase();
+      
+      if (constraints.includes('PRIMARY KEY')) col.isPK = true;
+      if (constraints.includes('NOT NULL')) col.nullable = false;
+      if (constraints.includes('UNIQUE')) col.unique = true;
+      
+      // Check for inline REFERENCES
+      const refMatch = (match[3] || '').match(/REFERENCES\s+([^\s(]+)\s*\(([^)]+)\)/i);
+      if (refMatch) {
+        col.isFK = true;
+        col.references = { table: refMatch[1], column: refMatch[2].trim() };
+      }
+      
+      // Check for DEFAULT
+      const defaultMatch = (match[3] || '').match(/DEFAULT\s+([^\s,]+)/i);
+      if (defaultMatch) col.defaultValue = defaultMatch[1];
+      
+      return col;
+    }
+    
+    splitColumnDefs(str) {
+      const defs = [];
+      let current = '';
+      let depth = 0;
+      
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        else if (c === ',' && depth === 0) {
+          if (current.trim()) defs.push(current.trim());
+          current = '';
+          continue;
+        }
+        current += c;
+      }
+      if (current.trim()) defs.push(current.trim());
+      return defs;
+    }
+    
+    parseCreateView(sql) {
+      const match = sql.match(/CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+([^\s(]+)\s+AS\s+([\s\S]+)$/i);
+      if (!match) throw new Error('Invalid CREATE VIEW');
+      return { type: 'CREATE_VIEW', targetView: this.parseTableName(match[1]), ...this.parseSelect(match[2]) };
     }
 
     normalize(sql) {
@@ -545,7 +674,15 @@
 
   // ============ RELATIONSHIP INFERENCE ============
   class RelationshipInferenceEngine {
-    constructor(graph) { this.graph = graph; this.strategies = [new JoinUsageStrategy(), new NamingConventionStrategy()]; }
+    constructor(graph) { 
+      this.graph = graph; 
+      this.strategies = [
+        new ExplicitConstraintStrategy(),
+        new JoinUsageStrategy(), 
+        new NamingConventionStrategy(),
+        new LayerRulesStrategy()
+      ]; 
+    }
     
     async inferRelationships(models) {
       const candidates = [];
@@ -563,7 +700,12 @@
         if (merged.has(key)) {
           const existing = merged.get(key);
           existing.signals.push({ strategy: c.strategy, confidence: c.confidence });
+          // Boost confidence when multiple strategies agree
           existing.confidence = Math.min(1.0, existing.confidence + c.confidence * 0.3);
+          // Upgrade cardinality if we have better info
+          if (c.cardinality && c.cardinality !== 'unknown' && existing.cardinality === 'unknown') {
+            existing.cardinality = c.cardinality;
+          }
         } else {
           merged.set(key, { ...c, signals: [{ strategy: c.strategy, confidence: c.confidence }] });
         }
@@ -572,32 +714,126 @@
     }
   }
 
+  // Strategy 1: Explicit DDL constraints (highest confidence)
+  class ExplicitConstraintStrategy {
+    async infer(models, graph) {
+      const candidates = [];
+      
+      for (const model of models) {
+        // Check for DDL-parsed constraints
+        if (model.constraints) {
+          // Primary keys
+          for (const pkCol of (model.constraints.primaryKey || [])) {
+            const col = (model.columns || []).find(c => c.name.toLowerCase() === pkCol.toLowerCase());
+            if (col) col.isPK = true;
+          }
+          
+          // Foreign keys from DDL
+          for (const fk of (model.constraints.foreignKeys || [])) {
+            for (let i = 0; i < fk.columns.length; i++) {
+              candidates.push({
+                from: { table: model.name, column: fk.columns[i] },
+                to: { table: fk.refTable, column: fk.refColumns[i] || fk.refColumns[0] },
+                type: EdgeType.FOREIGN_KEY,
+                confidence: Confidence.EXPLICIT,
+                strategy: 'explicit_constraint',
+                cardinality: 'many-to-one',
+                explanation: `Explicit FOREIGN KEY constraint in DDL`
+              });
+            }
+          }
+        }
+        
+        // Check for inline column references
+        for (const col of (model.columns || [])) {
+          if (col.references) {
+            candidates.push({
+              from: { table: model.name, column: col.name },
+              to: { table: col.references.table, column: col.references.column },
+              type: EdgeType.FOREIGN_KEY,
+              confidence: Confidence.EXPLICIT,
+              strategy: 'explicit_constraint',
+              cardinality: 'many-to-one',
+              explanation: `Inline REFERENCES constraint on column ${col.name}`
+            });
+          }
+        }
+      }
+      
+      return candidates;
+    }
+  }
+
+  // Strategy 2: Join usage patterns
   class JoinUsageStrategy {
     async infer(models, graph) {
       const candidates = [];
+      const joinFrequency = new Map(); // Track how often each join pattern appears
+      
       for (const model of models) {
         for (const join of (model.joinMetadata || [])) {
           if (!join.predicate) continue;
           const cols = this.parseJoinPredicate(join.predicate);
+          
           for (const { left, right } of cols) {
+            const key = `${left.table}.${left.column}->${right.table}.${right.column}`;
+            joinFrequency.set(key, (joinFrequency.get(key) || 0) + 1);
+            
+            // Infer cardinality from join type and naming
+            let cardinality = 'unknown';
+            if (join.type === 'LEFT' || join.type === 'RIGHT') {
+              // LEFT JOIN typically means many-to-one (fact -> dim)
+              cardinality = 'many-to-one';
+            } else if (join.type === 'INNER') {
+              // Could be either, check naming
+              if (right.column.toLowerCase() === 'id' || right.column.toLowerCase().endsWith('_id')) {
+                cardinality = 'many-to-one';
+              }
+            }
+            
             candidates.push({
-              from: { table: model.name, column: left.column }, to: { table: join.rightTable, column: right.column },
-              type: EdgeType.JOINS_ON, confidence: Confidence.JOIN_USAGE, strategy: 'join_usage',
+              from: { table: left.table, column: left.column }, 
+              to: { table: right.table, column: right.column },
+              type: EdgeType.JOINS_ON, 
+              confidence: Confidence.JOIN_USAGE, 
+              strategy: 'join_usage',
+              cardinality: cardinality,
+              joinType: join.type,
               explanation: `Found in SQL join: ${join.predicate}`
             });
           }
         }
       }
+      
+      // Boost confidence for frequently used joins
+      for (const c of candidates) {
+        const key = `${c.from.table}.${c.from.column}->${c.to.table}.${c.to.column}`;
+        const freq = joinFrequency.get(key) || 1;
+        if (freq > 1) {
+          c.confidence = Math.min(1.0, c.confidence + 0.1 * (freq - 1));
+          c.explanation += ` (used ${freq} times)`;
+        }
+      }
+      
       return candidates;
     }
+    
     parseJoinPredicate(pred) {
       const results = [];
-      const eqMatch = pred.match(/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/);
-      if (eqMatch) results.push({ left: { table: eqMatch[1], column: eqMatch[2] }, right: { table: eqMatch[3], column: eqMatch[4] } });
+      // Match all equality conditions in the predicate
+      const regex = /(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/g;
+      let match;
+      while ((match = regex.exec(pred)) !== null) {
+        results.push({ 
+          left: { table: match[1], column: match[2] }, 
+          right: { table: match[3], column: match[4] } 
+        });
+      }
       return results;
     }
   }
 
+  // Strategy 3: Naming conventions
   class NamingConventionStrategy {
     async infer(models, graph) {
       const candidates = [];
@@ -627,6 +863,428 @@
         }
       }
       return candidates;
+    }
+  }
+
+  // Strategy 4: Layer rules (gold/silver/bronze patterns)
+  class LayerRulesStrategy {
+    async infer(models, graph) {
+      const candidates = [];
+      const layerOrder = { 'bronze': 0, 'raw': 0, 'staging': 1, 'silver': 2, 'intermediate': 2, 'gold': 3, 'mart': 3, 'semantic': 3 };
+      
+      // Build model lookup by name
+      const modelByName = new Map();
+      for (const model of models) {
+        modelByName.set(model.name.toLowerCase(), model);
+      }
+      
+      for (const model of models) {
+        const modelLayer = this.getLayerLevel(model, layerOrder);
+        
+        // Check dependencies - they should be from lower or same layer
+        for (const dep of (model.dependencies || [])) {
+          const depName = dep.split('.').pop().toLowerCase();
+          const depModel = modelByName.get(depName);
+          
+          if (depModel) {
+            const depLayer = this.getLayerLevel(depModel, layerOrder);
+            
+            // Flag if gold depends on bronze (skip silver) - unusual pattern
+            if (modelLayer >= 3 && depLayer === 0) {
+              // This is a potential data quality issue, but still a valid relationship
+              // Lower confidence since it might be intentional
+            }
+            
+            // Infer fact/dim patterns
+            const modelName = model.name.toLowerCase();
+            const depModelName = depModel.name.toLowerCase();
+            
+            // Fact tables typically join to dimension tables
+            if ((modelName.startsWith('fact_') || modelName.includes('_fact')) && 
+                (depModelName.startsWith('dim_') || depModelName.includes('_dim'))) {
+              // Find common join columns
+              for (const col of (model.columns || [])) {
+                const colLower = col.name.toLowerCase();
+                if (colLower.endsWith('_id') || colLower.endsWith('_key')) {
+                  // Check if dim has matching column
+                  const dimCol = (depModel.columns || []).find(dc => 
+                    dc.name.toLowerCase() === colLower || 
+                    dc.name.toLowerCase() === 'id' ||
+                    dc.name.toLowerCase() === `${depModelName.replace('dim_', '')}_id`
+                  );
+                  
+                  if (dimCol) {
+                    candidates.push({
+                      from: { table: model.name, column: col.name },
+                      to: { table: depModel.name, column: dimCol.name },
+                      type: EdgeType.FOREIGN_KEY,
+                      confidence: 0.5, // Medium confidence for pattern-based
+                      strategy: 'layer_rules',
+                      cardinality: 'many-to-one',
+                      explanation: `Fact-to-dim pattern: ${model.name} -> ${depModel.name}`
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      return candidates;
+    }
+    
+    getLayerLevel(model, layerOrder) {
+      const layer = (model.layer || model.tableType || '').toLowerCase();
+      if (layerOrder[layer] !== undefined) return layerOrder[layer];
+      
+      // Try to infer from name
+      const name = model.name.toLowerCase();
+      if (name.includes('raw') || name.includes('bronze')) return 0;
+      if (name.includes('stg') || name.includes('staging')) return 1;
+      if (name.includes('silver') || name.includes('int_')) return 2;
+      if (name.includes('gold') || name.includes('mart') || name.startsWith('dim_') || name.startsWith('fact_')) return 3;
+      
+      return 1; // Default to staging
+    }
+  }
+
+  // ============ GRAPH BUILDER ============
+  class GraphBuilder {
+    constructor(graph) {
+      this.graph = graph || new MetadataGraph();
+      this.modelIndex = new Map(); // name -> nodeId
+      this.columnIndex = new Map(); // modelName.colName -> nodeId
+    }
+
+    getGraph() { return this.graph; }
+
+    addModel(schema) {
+      const modelId = schema.id || `model_${this.hash(schema.name.toLowerCase())}`;
+      
+      // Create or update model node
+      let modelNode = this.graph.getNode(modelId);
+      if (!modelNode) {
+        modelNode = this.graph.addNode(modelId, NodeType.MODEL, {
+          name: schema.name,
+          schema: schema.schema,
+          database: schema.database,
+          layer: schema.layer || schema.tableType,
+          description: schema.description,
+          isAggregated: schema.isAggregated,
+          grainColumns: schema.grainColumns || [],
+          isStub: schema.is_stub || false,
+          sourceType: schema.sourceType,
+          filePath: schema.filePath
+        });
+      } else {
+        this.graph.updateNode(modelId, {
+          layer: schema.layer || schema.tableType,
+          description: schema.description,
+          isAggregated: schema.isAggregated,
+          grainColumns: schema.grainColumns || [],
+          isStub: schema.is_stub || false
+        });
+      }
+      
+      this.modelIndex.set(schema.name.toLowerCase(), modelId);
+      
+      // Add columns
+      for (const col of (schema.columns || [])) {
+        this.addColumn(modelId, schema.name, col);
+      }
+      
+      // Add dependency edges
+      for (const dep of (schema.dependencies || [])) {
+        const depName = dep.split('.').pop().toLowerCase();
+        const depModelId = this.modelIndex.get(depName) || `model_${this.hash(depName)}`;
+        
+        // Ensure dependency model exists (as stub if needed)
+        if (!this.graph.getNode(depModelId)) {
+          this.graph.addNode(depModelId, NodeType.MODEL, {
+            name: dep.split('.').pop(),
+            isStub: true,
+            layer: 'unknown'
+          });
+          this.modelIndex.set(depName, depModelId);
+        }
+        
+        this.graph.addEdge(modelId, depModelId, EdgeType.DEPENDS_ON, {
+          confidence: Confidence.EXPLICIT
+        });
+      }
+      
+      // Add join edges from metadata
+      for (const join of (schema.joinMetadata || [])) {
+        if (join.rightTable && join.predicate) {
+          const rightName = join.rightTable.split('.').pop().toLowerCase();
+          const rightModelId = this.modelIndex.get(rightName) || `model_${this.hash(rightName)}`;
+          
+          // Parse join predicate for column info
+          const joinCols = this.parseJoinPredicate(join.predicate);
+          
+          this.graph.addEdge(modelId, rightModelId, EdgeType.JOINS_ON, {
+            joinType: join.type,
+            predicate: join.predicate,
+            leftColumns: joinCols.left,
+            rightColumns: joinCols.right,
+            confidence: Confidence.JOIN_USAGE
+          });
+        }
+      }
+      
+      return modelId;
+    }
+
+    addColumn(modelId, modelName, col) {
+      const colId = col.id || `col_${modelId}_${this.hash(col.name.toLowerCase())}`;
+      const colKey = `${modelName.toLowerCase()}.${col.name.toLowerCase()}`;
+      
+      let colNode = this.graph.getNode(colId);
+      if (!colNode) {
+        colNode = this.graph.addNode(colId, NodeType.COLUMN, {
+          name: col.name,
+          modelId: modelId,
+          modelName: modelName,
+          type: col.type,
+          typeConfidence: col.typeConfidence || col.type_confidence,
+          semanticRole: col.semanticRole || col.semantic_role,
+          aggregationType: col.aggregationType || col.aggregation_type,
+          expressionSQL: col.expressionSQL || col.expression_sql,
+          sourceColumns: col.sourceColumns || col.source_columns || [],
+          isPK: col.isPK || false,
+          isFK: col.isFK || false,
+          nullable: col.nullable,
+          isComputed: col.isComputed,
+          isPassthrough: col.isPassthrough,
+          isGrain: col.is_grain || false
+        });
+      }
+      
+      this.columnIndex.set(colKey, colId);
+      
+      // Create PRODUCES edge (model -> column)
+      this.graph.addEdge(modelId, colId, EdgeType.PRODUCES, {});
+      
+      // Create DERIVES_FROM edges for column lineage
+      for (const srcCol of (col.sourceColumns || col.source_columns || [])) {
+        if (srcCol && srcCol !== '*') {
+          const srcParts = srcCol.includes('.') ? srcCol.split('.') : [null, srcCol];
+          const srcTable = srcParts[0]?.toLowerCase();
+          const srcColName = srcParts[srcParts.length - 1].toLowerCase();
+          
+          if (srcTable) {
+            const srcColKey = `${srcTable}.${srcColName}`;
+            let srcColId = this.columnIndex.get(srcColKey);
+            
+            // If source column doesn't exist, create a stub
+            if (!srcColId) {
+              const srcModelId = this.modelIndex.get(srcTable) || `model_${this.hash(srcTable)}`;
+              srcColId = `col_${srcModelId}_${this.hash(srcColName)}`;
+              
+              if (!this.graph.getNode(srcColId)) {
+                this.graph.addNode(srcColId, NodeType.COLUMN, {
+                  name: srcColName,
+                  modelId: srcModelId,
+                  modelName: srcTable,
+                  isStub: true
+                });
+                this.columnIndex.set(srcColKey, srcColId);
+              }
+            }
+            
+            this.graph.addEdge(colId, srcColId, EdgeType.DERIVES_FROM, {
+              confidence: col.isPassthrough ? Confidence.EXPLICIT : Confidence.JOIN_USAGE
+            });
+          }
+        }
+      }
+      
+      return colId;
+    }
+
+    parseJoinPredicate(pred) {
+      const left = [], right = [];
+      const matches = pred.matchAll(/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/g);
+      for (const m of matches) {
+        left.push({ table: m[1], column: m[2] });
+        right.push({ table: m[3], column: m[4] });
+      }
+      return { left, right };
+    }
+
+    inferRelationships(models) {
+      const engine = new RelationshipInferenceEngine(this.graph);
+      return engine.inferRelationships(models);
+    }
+
+    applyInferredRelationships(candidates) {
+      for (const rel of candidates) {
+        const fromColKey = `${rel.from.table.toLowerCase()}.${rel.from.column.toLowerCase()}`;
+        const toColKey = `${rel.to.table.toLowerCase()}.${rel.to.column.toLowerCase()}`;
+        
+        const fromColId = this.columnIndex.get(fromColKey);
+        const toColId = this.columnIndex.get(toColKey);
+        
+        if (fromColId && toColId) {
+          this.graph.addEdge(fromColId, toColId, rel.type, {
+            confidence: rel.confidence,
+            strategy: rel.strategy,
+            explanation: rel.explanation,
+            signals: rel.signals,
+            cardinality: rel.cardinality || 'unknown'
+          });
+        }
+      }
+    }
+
+    // Convert graph to ERDState format
+    toERDState() {
+      const tables = [];
+      const relationships = [];
+      
+      // Convert model nodes to tables
+      for (const model of this.graph.getNodesByType(NodeType.MODEL)) {
+        const columns = this.graph.getColumnsForModel(model.id).map(col => ({
+          id: col.id,
+          name: col.name,
+          type: col.type || 'VARCHAR',
+          type_confidence: col.typeConfidence,
+          semantic_role: col.semanticRole,
+          aggregation_type: col.aggregationType,
+          expression_sql: col.expressionSQL,
+          source_columns: col.sourceColumns,
+          isPK: col.isPK,
+          isFK: col.isFK,
+          nullable: col.nullable,
+          is_grain: col.isGrain
+        }));
+        
+        tables.push({
+          id: model.id,
+          name: model.name,
+          tableType: model.layer || 'raw',
+          description: model.description,
+          is_aggregated: model.isAggregated,
+          grain_columns: model.grainColumns,
+          is_stub: model.isStub,
+          schema_source: 'compiler_v2',
+          columns: columns,
+          x: model.x,
+          y: model.y
+        });
+      }
+      
+      // Convert edges to relationships
+      const joinEdges = this.graph.getEdgesByType(EdgeType.JOINS_ON);
+      const fkEdges = this.graph.getEdgesByType(EdgeType.FOREIGN_KEY);
+      
+      for (const edge of [...joinEdges, ...fkEdges]) {
+        const sourceNode = this.graph.getNode(edge.source);
+        const targetNode = this.graph.getNode(edge.target);
+        
+        if (sourceNode && targetNode) {
+          // For model-level joins
+          if (sourceNode.type === NodeType.MODEL && targetNode.type === NodeType.MODEL) {
+            const leftCols = edge.leftColumns || [];
+            const rightCols = edge.rightColumns || [];
+            
+            relationships.push({
+              id: edge.id,
+              from: { 
+                table: sourceNode.name, 
+                column: leftCols[0]?.column || 'id' 
+              },
+              to: { 
+                table: targetNode.name, 
+                column: rightCols[0]?.column || 'id' 
+              },
+              type: edge.type === EdgeType.FOREIGN_KEY ? 'foreign_key' : 'join',
+              join_type: edge.joinType || 'LEFT',
+              on_sql: edge.predicate,
+              confidence: edge.confidence,
+              cardinality: edge.cardinality || 'many-to-one',
+              explanation: edge.explanation
+            });
+          }
+          // For column-level FKs
+          else if (sourceNode.type === NodeType.COLUMN && targetNode.type === NodeType.COLUMN) {
+            relationships.push({
+              id: edge.id,
+              from: { 
+                table: sourceNode.modelName, 
+                column: sourceNode.name 
+              },
+              to: { 
+                table: targetNode.modelName, 
+                column: targetNode.name 
+              },
+              type: 'foreign_key',
+              confidence: edge.confidence,
+              cardinality: edge.cardinality || 'many-to-one',
+              explanation: edge.explanation
+            });
+          }
+        }
+      }
+      
+      return { tables, relationships };
+    }
+
+    // Get column lineage for a specific column
+    getColumnLineage(modelName, columnName, depth = 10) {
+      const colKey = `${modelName.toLowerCase()}.${columnName.toLowerCase()}`;
+      const colId = this.columnIndex.get(colKey);
+      if (!colId) return { upstream: [], downstream: [] };
+      
+      const upstream = this.graph.getUpstream(colId, depth, [EdgeType.DERIVES_FROM]);
+      const downstream = this.graph.getDownstream(colId, depth, [EdgeType.DERIVES_FROM]);
+      
+      return {
+        upstream: upstream.map(u => ({
+          column: u.node.name,
+          model: u.node.modelName,
+          depth: u.depth,
+          type: u.node.type
+        })),
+        downstream: downstream.map(d => ({
+          column: d.node.name,
+          model: d.node.modelName,
+          depth: d.depth,
+          type: d.node.type
+        }))
+      };
+    }
+
+    // Get model lineage (DAG)
+    getModelLineage(modelName, depth = 10) {
+      const modelId = this.modelIndex.get(modelName.toLowerCase());
+      if (!modelId) return { upstream: [], downstream: [] };
+      
+      const upstream = this.graph.getUpstream(modelId, depth, [EdgeType.DEPENDS_ON]);
+      const downstream = this.graph.getDownstream(modelId, depth, [EdgeType.DEPENDS_ON]);
+      
+      return {
+        upstream: upstream.map(u => ({
+          name: u.node.name,
+          layer: u.node.layer,
+          depth: u.depth
+        })),
+        downstream: downstream.map(d => ({
+          name: d.node.name,
+          layer: d.node.layer,
+          depth: d.depth
+        }))
+      };
+    }
+
+    hash(str) { 
+      let h = 0; 
+      for (let i = 0; i < str.length; i++) { 
+        h = ((h << 5) - h) + str.charCodeAt(i); 
+        h = h & h; 
+      } 
+      return Math.abs(h).toString(36); 
     }
   }
 
@@ -701,11 +1359,178 @@
     }
   }
 
+  // ============ GRAPH PERSISTENCE (IndexedDB) ============
+  class GraphStorage {
+    constructor(dbName = 'SQLCopilotGraphDB') {
+      this.dbName = dbName;
+      this.dbVersion = 1;
+      this.db = null;
+    }
+
+    async open() {
+      if (this.db) return this.db;
+      
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(this.dbName, this.dbVersion);
+        
+        request.onerror = () => reject(request.error);
+        
+        request.onsuccess = () => {
+          this.db = request.result;
+          resolve(this.db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          
+          // Store for graph snapshots
+          if (!db.objectStoreNames.contains('graphs')) {
+            const graphStore = db.createObjectStore('graphs', { keyPath: 'id' });
+            graphStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+          }
+          
+          // Store for file hashes (for incremental updates)
+          if (!db.objectStoreNames.contains('fileHashes')) {
+            const hashStore = db.createObjectStore('fileHashes', { keyPath: 'path' });
+            hashStore.createIndex('hash', 'hash', { unique: false });
+          }
+          
+          // Store for parsed schemas (cache)
+          if (!db.objectStoreNames.contains('schemaCache')) {
+            const cacheStore = db.createObjectStore('schemaCache', { keyPath: 'hash' });
+            cacheStore.createIndex('modelName', 'modelName', { unique: false });
+          }
+        };
+      });
+    }
+
+    async saveGraph(graphBuilder, id = 'default') {
+      await this.open();
+      
+      const graphData = graphBuilder.getGraph().toJSON();
+      const record = {
+        id,
+        nodes: graphData.nodes,
+        edges: graphData.edges,
+        modelIndex: Array.from(graphBuilder.modelIndex.entries()),
+        columnIndex: Array.from(graphBuilder.columnIndex.entries()),
+        updatedAt: new Date().toISOString()
+      };
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['graphs'], 'readwrite');
+        const store = tx.objectStore('graphs');
+        const request = store.put(record);
+        request.onsuccess = () => resolve(true);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async loadGraph(id = 'default') {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['graphs'], 'readonly');
+        const store = tx.objectStore('graphs');
+        const request = store.get(id);
+        
+        request.onsuccess = () => {
+          const record = request.result;
+          if (!record) {
+            resolve(null);
+            return;
+          }
+          
+          // Reconstruct GraphBuilder
+          const graph = new MetadataGraph();
+          graph.fromJSON({ nodes: record.nodes, edges: record.edges });
+          
+          const graphBuilder = new GraphBuilder(graph);
+          graphBuilder.modelIndex = new Map(record.modelIndex);
+          graphBuilder.columnIndex = new Map(record.columnIndex);
+          
+          resolve(graphBuilder);
+        };
+        
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async saveFileHash(path, hash, schema) {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['fileHashes', 'schemaCache'], 'readwrite');
+        
+        // Save file hash
+        const hashStore = tx.objectStore('fileHashes');
+        hashStore.put({ path, hash, updatedAt: new Date().toISOString() });
+        
+        // Cache parsed schema
+        if (schema) {
+          const cacheStore = tx.objectStore('schemaCache');
+          cacheStore.put({ hash, schema, modelName: schema.name });
+        }
+        
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async getFileHash(path) {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['fileHashes'], 'readonly');
+        const store = tx.objectStore('fileHashes');
+        const request = store.get(path);
+        request.onsuccess = () => resolve(request.result?.hash || null);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async getCachedSchema(hash) {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['schemaCache'], 'readonly');
+        const store = tx.objectStore('schemaCache');
+        const request = store.get(hash);
+        request.onsuccess = () => resolve(request.result?.schema || null);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async clearAll() {
+      await this.open();
+      
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(['graphs', 'fileHashes', 'schemaCache'], 'readwrite');
+        tx.objectStore('graphs').clear();
+        tx.objectStore('fileHashes').clear();
+        tx.objectStore('schemaCache').clear();
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    // Compute content hash for incremental updates
+    static computeHash(content) {
+      let hash = 0;
+      for (let i = 0; i < content.length; i++) {
+        const char = content.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return Math.abs(hash).toString(36);
+    }
+  }
+
   // Export to global
   global.SQLCopilotV2 = {
     ExprType, JoinType, NodeType, EdgeType, Confidence, SemanticRole, AggregationType,
     SQLParser, renderExpression, SchemaExtractor, DbtResolver, SQLPreprocessor,
-    MetadataGraph, RelationshipInferenceEngine, JoinPathFinder
+    MetadataGraph, RelationshipInferenceEngine, JoinPathFinder, GraphBuilder, GraphStorage
   };
 
 })(typeof window !== 'undefined' ? window : this);

@@ -2361,6 +2361,11 @@
                   <button id="clear-highlights-btn" onclick="clearERDHighlights()" class="p-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg transition-colors view-hidden" title="Clear Highlights">
                     <span class="material-symbols-outlined text-sm">visibility_off</span>
                   </button>
+                  <div class="w-px h-6 bg-surface-lighter mx-2"></div>
+                  <button onclick="showJoinAssistant()" class="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg text-sm flex items-center gap-1 transition-colors" title="Join Assistant - Find join paths between tables">
+                    <span class="material-symbols-outlined text-sm">route</span>
+                    Join Assistant
+                  </button>
                 </div>
                 <div class="flex items-center gap-2">
                   <input type="text" id="erd-search" placeholder="Search tables..." 
@@ -2696,6 +2701,70 @@
                 <button onclick="hideAddTableModal()" class="flex-1 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Cancel</button>
                 <button onclick="saveERDTable()" class="flex-1 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm transition-colors">Save Table</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Join Assistant Modal -->
+        <div id="join-assistant-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 view-hidden flex items-center justify-center">
+          <div class="bg-surface rounded-2xl w-full max-w-2xl shadow-2xl border border-surface-light max-h-[80vh] flex flex-col">
+            <div class="p-4 border-b border-surface-light flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-accent">route</span>
+                <h2 class="text-lg font-semibold font-space">Join Assistant</h2>
+              </div>
+              <button onclick="hideJoinAssistant()" class="p-1 hover:bg-surface-light rounded transition-colors">
+                <span class="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+            <div class="p-4 space-y-4 overflow-auto flex-1">
+              <p class="text-sm text-gray-400">Select two tables to find the best join path between them.</p>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm text-gray-400 mb-1">From Table</label>
+                  <select id="join-from-table" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" onchange="updateJoinPaths()">
+                    <option value="">Select table...</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm text-gray-400 mb-1">To Table</label>
+                  <select id="join-to-table" class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" onchange="updateJoinPaths()">
+                    <option value="">Select table...</option>
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Join Paths Results -->
+              <div id="join-paths-results" class="space-y-3 view-hidden">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-medium text-gray-300">Recommended Join Paths</h3>
+                  <span id="join-paths-count" class="text-xs text-gray-500"></span>
+                </div>
+                <div id="join-paths-list" class="space-y-2"></div>
+              </div>
+              
+              <!-- No Paths Found -->
+              <div id="join-no-paths" class="text-center py-6 view-hidden">
+                <span class="material-symbols-outlined text-4xl text-gray-600 mb-2">link_off</span>
+                <p class="text-gray-500 text-sm">No join path found between these tables</p>
+                <p class="text-gray-600 text-xs mt-1">Try adding relationships or selecting different tables</p>
+              </div>
+              
+              <!-- SQL Preview -->
+              <div id="join-sql-preview" class="view-hidden">
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="text-sm font-medium text-gray-300">SQL Skeleton</h3>
+                  <button onclick="copyJoinSQL()" class="text-xs text-accent hover:text-accent/80 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">content_copy</span>
+                    Copy
+                  </button>
+                </div>
+                <pre id="join-sql-code" class="bg-surface-light rounded-lg p-3 text-xs font-mono overflow-x-auto text-gray-300 border border-surface-lighter"></pre>
+              </div>
+            </div>
+            <div class="p-4 border-t border-surface-light flex justify-end gap-2">
+              <button onclick="hideJoinAssistant()" class="px-4 py-2 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm transition-colors">Close</button>
             </div>
           </div>
         </div>
@@ -8925,6 +8994,212 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       showToast('Table deleted', 'success');
     }
 
+    // ==================== JOIN ASSISTANT ====================
+    let selectedJoinPath = null;
+    
+    function showJoinAssistant() {
+      if (ERDState.tables.length < 2) {
+        showToast('Need at least 2 tables to find join paths', 'warning');
+        return;
+      }
+      
+      // Populate table dropdowns
+      const fromSelect = document.getElementById('join-from-table');
+      const toSelect = document.getElementById('join-to-table');
+      
+      const tableOptions = ERDState.tables
+        .filter(t => !t.is_stub)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(t => `<option value="${t.name}">${t.name}</option>`)
+        .join('');
+      
+      fromSelect.innerHTML = '<option value="">Select table...</option>' + tableOptions;
+      toSelect.innerHTML = '<option value="">Select table...</option>' + tableOptions;
+      
+      // Reset results
+      document.getElementById('join-paths-results').classList.add('view-hidden');
+      document.getElementById('join-no-paths').classList.add('view-hidden');
+      document.getElementById('join-sql-preview').classList.add('view-hidden');
+      selectedJoinPath = null;
+      
+      document.getElementById('join-assistant-modal').classList.remove('view-hidden');
+    }
+    
+    function hideJoinAssistant() {
+      document.getElementById('join-assistant-modal').classList.add('view-hidden');
+    }
+    
+    function updateJoinPaths() {
+      const fromTable = document.getElementById('join-from-table').value;
+      const toTable = document.getElementById('join-to-table').value;
+      
+      const resultsDiv = document.getElementById('join-paths-results');
+      const noPathsDiv = document.getElementById('join-no-paths');
+      const sqlPreviewDiv = document.getElementById('join-sql-preview');
+      const pathsList = document.getElementById('join-paths-list');
+      
+      // Reset
+      resultsDiv.classList.add('view-hidden');
+      noPathsDiv.classList.add('view-hidden');
+      sqlPreviewDiv.classList.add('view-hidden');
+      selectedJoinPath = null;
+      
+      if (!fromTable || !toTable) return;
+      
+      if (fromTable === toTable) {
+        showToast('Select different tables', 'warning');
+        return;
+      }
+      
+      // Use the graph builder if available, otherwise build from ERDState
+      let paths = [];
+      
+      if (window.SQLCopilotGraph) {
+        const { JoinPathFinder } = window.SQLCopilotV2;
+        const pathFinder = new JoinPathFinder(window.SQLCopilotGraph.getGraph());
+        paths = pathFinder.findPaths(fromTable, toTable, { maxHops: 4, minConfidence: 0.2 });
+      } else {
+        // Fallback: build graph from ERDState
+        const { GraphBuilder, MetadataGraph, JoinPathFinder } = window.SQLCopilotV2;
+        const graphBuilder = new GraphBuilder(new MetadataGraph());
+        
+        // Add tables to graph
+        for (const table of ERDState.tables) {
+          graphBuilder.addModel({
+            name: table.name,
+            columns: table.columns || [],
+            tableType: table.tableType,
+            is_stub: table.is_stub,
+            dependencies: [],
+            joinMetadata: []
+          });
+        }
+        
+        // Add relationships as edges
+        for (const rel of ERDState.relationships) {
+          const fromModel = ERDState.tables.find(t => t.name.toLowerCase() === rel.from.table.toLowerCase());
+          const toModel = ERDState.tables.find(t => t.name.toLowerCase() === rel.to.table.toLowerCase());
+          
+          if (fromModel && toModel) {
+            graphBuilder.getGraph().addEdge(
+              `model_${graphBuilder.hash(fromModel.name.toLowerCase())}`,
+              `model_${graphBuilder.hash(toModel.name.toLowerCase())}`,
+              'joins_on',
+              {
+                predicate: rel.on_sql || `${rel.from.table}.${rel.from.column} = ${rel.to.table}.${rel.to.column}`,
+                joinType: rel.join_type || 'LEFT',
+                leftColumns: [{ table: rel.from.table, column: rel.from.column }],
+                rightColumns: [{ table: rel.to.table, column: rel.to.column }],
+                confidence: rel.confidence || 0.5
+              }
+            );
+          }
+        }
+        
+        const pathFinder = new JoinPathFinder(graphBuilder.getGraph());
+        paths = pathFinder.findPaths(fromTable, toTable, { maxHops: 4, minConfidence: 0.2 });
+      }
+      
+      if (paths.length === 0) {
+        noPathsDiv.classList.remove('view-hidden');
+        return;
+      }
+      
+      // Display paths
+      resultsDiv.classList.remove('view-hidden');
+      document.getElementById('join-paths-count').textContent = `${paths.length} path${paths.length > 1 ? 's' : ''} found`;
+      
+      pathsList.innerHTML = paths.slice(0, 5).map((path, idx) => {
+        const confidenceClass = path.score >= 0.7 ? 'text-green-400' : path.score >= 0.4 ? 'text-yellow-400' : 'text-gray-400';
+        const confidenceLabel = path.score >= 0.7 ? 'High' : path.score >= 0.4 ? 'Medium' : 'Low';
+        
+        return `
+          <div class="bg-surface-light rounded-lg p-3 cursor-pointer hover:bg-surface-lighter transition-colors border ${idx === 0 ? 'border-accent/50' : 'border-transparent'}" 
+               onclick="selectJoinPath(${idx})">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-medium ${idx === 0 ? 'text-accent' : 'text-gray-400'}">${idx === 0 ? 'Best Match' : `Option ${idx + 1}`}</span>
+                <span class="text-xs text-gray-500">${path.hops} hop${path.hops > 1 ? 's' : ''}</span>
+              </div>
+              <span class="text-xs ${confidenceClass}">${confidenceLabel} confidence</span>
+            </div>
+            <div class="flex items-center gap-1 text-sm font-mono overflow-x-auto">
+              ${path.tables.map((t, i) => `
+                <span class="text-white">${t}</span>
+                ${i < path.tables.length - 1 ? '<span class="material-symbols-outlined text-xs text-gray-500">arrow_forward</span>' : ''}
+              `).join('')}
+            </div>
+            ${path.joins.length > 0 ? `
+              <div class="mt-2 text-xs text-gray-500">
+                ${path.joins.map(j => `<div class="truncate">${j.sourceColumn || '?'} = ${j.targetColumn || '?'}</div>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+      
+      // Store paths for selection
+      window._joinPaths = paths;
+      
+      // Auto-select first path
+      if (paths.length > 0) {
+        selectJoinPath(0);
+      }
+    }
+    
+    function selectJoinPath(idx) {
+      const paths = window._joinPaths || [];
+      if (idx >= paths.length) return;
+      
+      selectedJoinPath = paths[idx];
+      
+      // Update UI to show selected
+      const pathItems = document.querySelectorAll('#join-paths-list > div');
+      pathItems.forEach((item, i) => {
+        if (i === idx) {
+          item.classList.add('border-accent/50');
+          item.classList.remove('border-transparent');
+        } else {
+          item.classList.remove('border-accent/50');
+          item.classList.add('border-transparent');
+        }
+      });
+      
+      // Generate and show SQL
+      const sqlPreviewDiv = document.getElementById('join-sql-preview');
+      const sqlCode = document.getElementById('join-sql-code');
+      
+      if (selectedJoinPath.toSQL) {
+        sqlCode.textContent = selectedJoinPath.toSQL('LEFT');
+      } else {
+        // Generate SQL manually
+        const lines = ['SELECT', '  -- TODO: select columns'];
+        if (selectedJoinPath.tables.length > 0) {
+          lines.push(`FROM ${selectedJoinPath.tables[0]} t0`);
+          selectedJoinPath.joins.forEach((j, i) => {
+            const joinType = j.suggestedJoinType || 'LEFT';
+            lines.push(`${joinType} JOIN ${j.targetTable} t${i + 1}`);
+            if (j.sourceColumn && j.targetColumn) {
+              lines.push(`  ON t${i}.${j.sourceColumn} = t${i + 1}.${j.targetColumn}`);
+            }
+          });
+        }
+        lines.push('WHERE 1=1', '  -- TODO: add filters');
+        sqlCode.textContent = lines.join('\n');
+      }
+      
+      sqlPreviewDiv.classList.remove('view-hidden');
+    }
+    
+    function copyJoinSQL() {
+      const sqlCode = document.getElementById('join-sql-code').textContent;
+      navigator.clipboard.writeText(sqlCode).then(() => {
+        showToast('SQL copied to clipboard', 'success');
+      }).catch(() => {
+        showToast('Failed to copy', 'error');
+      });
+    }
+
     // ==================== ERD TABLE MERGE ====================
     function showMergeTablesModal() {
       if (ERDState.tables.length < 2) {
@@ -10786,9 +11061,9 @@ If action is unknown, set message to explain what went wrong.`,
 
     // ==================== SCHEMA DETECTION FROM QUERIES (V2 Compiler-Based) ====================
     async function analyzeQueryForSchema(sql) {
-      // Use the v2 compiler-based parser instead of AI
+      // Use the v2 compiler-based parser with GraphBuilder
       try {
-        const { SQLParser, SchemaExtractor, renderExpression } = window.SQLCopilotV2;
+        const { SQLParser, SchemaExtractor, GraphBuilder, MetadataGraph } = window.SQLCopilotV2;
         
         const parser = new SQLParser(AppState.selectedDialect || 'presto');
         const extractor = new SchemaExtractor();
@@ -10804,85 +11079,37 @@ If action is unknown, set message to explain what went wrong.`,
         // Extract schema from IR
         const schema = extractor.extract(ir, 'query_result');
         
-        // Convert to the format expected by showSchemaDetectModal
-        const tables = [];
-        const relationships = [];
+        // Use GraphBuilder to properly populate graph and extract relationships
+        const graphBuilder = new GraphBuilder(new MetadataGraph());
+        graphBuilder.addModel(schema);
         
-        // Build table from extracted columns
-        if (schema.columns && schema.columns.length > 0) {
-          // Group columns by source table if possible
-          const tableColumns = new Map();
-          
-          for (const col of schema.columns) {
-            // Try to determine source table from sourceColumns
-            let sourceTable = 'query_result';
-            if (col.sourceColumns && col.sourceColumns.length > 0) {
-              const firstSource = col.sourceColumns[0];
-              if (firstSource.includes('.')) {
-                sourceTable = firstSource.split('.')[0];
-              }
-            }
-            
-            if (!tableColumns.has(sourceTable)) {
-              tableColumns.set(sourceTable, []);
-            }
-            
-            tableColumns.get(sourceTable).push({
-              name: col.name,
-              type: col.type || 'VARCHAR',
-              isPK: col.isPK || false,
-              isFK: col.isFK || false,
-              semantic_role: col.semanticRole,
-              aggregation_type: col.aggregationType !== 'none' ? col.aggregationType : null,
-              expression_sql: col.expressionSQL,
-              source_columns: col.sourceColumns,
-              type_confidence: col.typeConfidence
-            });
-          }
-          
-          // Create table entries
-          for (const [tableName, columns] of tableColumns) {
-            tables.push({
-              name: tableName,
-              columns: columns,
-              is_aggregated: schema.isAggregated,
-              grain_columns: schema.grainColumns
-            });
-          }
-        }
-        
-        // Extract source tables from dependencies
+        // Add stub models for dependencies
         for (const dep of (schema.dependencies || [])) {
-          const tableName = dep.split('.').pop();
-          if (!tables.some(t => t.name.toLowerCase() === tableName.toLowerCase())) {
-            tables.push({
-              name: tableName,
-              columns: [],
-              is_stub: true
-            });
-          }
+          const depName = dep.split('.').pop();
+          graphBuilder.addModel({
+            name: depName,
+            is_stub: true,
+            tableType: 'raw',
+            columns: [],
+            dependencies: [],
+            joinMetadata: []
+          });
         }
         
-        // Extract relationships from join metadata
-        for (const join of (schema.joinMetadata || [])) {
-          if (join.predicate) {
-            // Parse join predicate to extract relationship
-            const eqMatch = join.predicate.match(/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/);
-            if (eqMatch) {
-              relationships.push({
-                from: { table: eqMatch[1], column: eqMatch[2] },
-                to: { table: eqMatch[3], column: eqMatch[4] },
-                type: join.type === 'LEFT' ? 'many-to-one' : 'one-to-many',
-                join_type: join.type,
-                on_sql: join.predicate
-              });
-            }
-          }
-        }
+        // Run relationship inference
+        const inferredRels = await graphBuilder.inferRelationships([schema]);
+        graphBuilder.applyInferredRelationships(inferredRels);
         
-        console.log('V2 Schema extraction result:', { tables, relationships, schema });
+        // Convert to ERDState format
+        const erdData = graphBuilder.toERDState();
         
-        return { tables, relationships };
+        console.log('V2 Schema extraction result:', { 
+          tables: erdData.tables.length, 
+          relationships: erdData.relationships.length,
+          schema 
+        });
+        
+        return erdData;
         
       } catch (e) {
         console.error('V2 Schema analysis failed:', e);
@@ -12536,20 +12763,51 @@ If action is unknown, set message to explain what went wrong.`,
     }
     
     async function analyzeSchemaForBatch(sqlFiles, signal) {
-      // V2 Compiler-based schema analysis - no AI required
-      const { SQLParser, SchemaExtractor } = window.SQLCopilotV2;
+      // V2 Compiler-based schema analysis with full graph population and caching
+      const { SQLParser, SchemaExtractor, GraphBuilder, MetadataGraph, GraphStorage } = window.SQLCopilotV2;
       
       const parser = new SQLParser(AppState.selectedDialect || 'presto');
       const extractor = new SchemaExtractor();
+      const storage = new GraphStorage();
       
-      const tables = [];
-      const relationships = [];
-      const tableMap = new Map(); // Track tables to avoid duplicates
+      // Try to load existing graph for incremental updates
+      let graphBuilder;
+      try {
+        graphBuilder = await storage.loadGraph('default');
+        if (graphBuilder) {
+          console.log('Loaded existing graph from IndexedDB');
+        }
+      } catch (e) {
+        console.warn('Could not load cached graph:', e);
+      }
+      
+      if (!graphBuilder) {
+        graphBuilder = new GraphBuilder(new MetadataGraph());
+      }
+      
+      const parsedSchemas = []; // Collect all schemas for relationship inference
+      let filesProcessed = 0;
+      let filesSkipped = 0;
       
       for (const file of sqlFiles) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         
         try {
+          // Check if file has changed (incremental update)
+          const contentHash = GraphStorage.computeHash(file.content);
+          const cachedHash = await storage.getFileHash(file.path);
+          
+          if (cachedHash === contentHash) {
+            // File unchanged, try to use cached schema
+            const cachedSchema = await storage.getCachedSchema(contentHash);
+            if (cachedSchema) {
+              parsedSchemas.push(cachedSchema);
+              filesSkipped++;
+              continue;
+            }
+          }
+          
+          // Parse the file
           const ir = parser.parse(file.content);
           
           if (ir.type === 'ERROR') {
@@ -12561,71 +12819,21 @@ If action is unknown, set message to explain what went wrong.`,
           const fileName = file.path.split(/[/\\]/).pop().replace(/\.sql$/i, '');
           const schema = extractor.extract(ir, fileName, { layer: file.tableType });
           
-          // Build table entry
-          const tableEntry = {
-            id: schema.id,
-            name: schema.name,
-            description: schema.description || `Extracted from ${file.path}`,
-            tableType: file.tableType || schema.layer || 'raw',
-            is_aggregated: schema.isAggregated,
-            grain_columns: schema.grainColumns,
-            schema_source: 'compiler_v2',
-            columns: schema.columns.map(col => ({
-              id: col.id,
-              name: col.name,
-              type: col.type,
-              type_confidence: col.typeConfidence,
-              description: col.isComputed ? `Computed: ${col.expressionSQL}` : null,
-              semantic_role: col.semanticRole,
-              aggregation_type: col.aggregationType !== 'none' ? col.aggregationType : null,
-              expression_sql: col.expressionSQL,
-              source_columns: col.sourceColumns,
-              is_grain: schema.grainColumns?.includes(col.name),
-              isPK: col.isPK,
-              isFK: col.isFK,
-              nullable: col.nullable,
-              isComputed: col.isComputed,
-              isPassthrough: col.isPassthrough
-            }))
-          };
+          // Enrich schema with file metadata
+          schema.filePath = file.path;
+          schema.tableType = file.tableType || schema.layer || 'raw';
+          schema.description = schema.description || `Extracted from ${file.path}`;
           
-          // Add or merge table
-          if (!tableMap.has(schema.name.toLowerCase())) {
-            tableMap.set(schema.name.toLowerCase(), tableEntry);
-            tables.push(tableEntry);
-          }
+          // Add to graph builder (creates nodes and edges)
+          graphBuilder.addModel(schema);
+          parsedSchemas.push(schema);
+          filesProcessed++;
           
-          // Extract relationships from joins
-          for (const join of (schema.joinMetadata || [])) {
-            if (join.predicate) {
-              const eqMatch = join.predicate.match(/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/);
-              if (eqMatch) {
-                relationships.push({
-                  from: { table: eqMatch[1], column: eqMatch[2] },
-                  to: { table: eqMatch[3], column: eqMatch[4] },
-                  type: 'join',
-                  join_type: join.type,
-                  on_sql: join.predicate
-                });
-              }
-            }
-          }
-          
-          // Add stub tables for dependencies
-          for (const dep of (schema.dependencies || [])) {
-            const depName = dep.split('.').pop();
-            if (!tableMap.has(depName.toLowerCase())) {
-              const stubTable = {
-                id: `table_stub_${stableHash(depName.toLowerCase())}`,
-                name: depName,
-                tableType: 'raw',
-                is_stub: true,
-                schema_source: 'compiler_v2_stub',
-                columns: []
-              };
-              tableMap.set(depName.toLowerCase(), stubTable);
-              tables.push(stubTable);
-            }
+          // Cache the parsed schema
+          try {
+            await storage.saveFileHash(file.path, contentHash, schema);
+          } catch (e) {
+            console.warn('Could not cache schema:', e);
           }
           
         } catch (e) {
@@ -12633,9 +12841,38 @@ If action is unknown, set message to explain what went wrong.`,
         }
       }
       
-      console.log('V2 Batch schema extraction:', { tables: tables.length, relationships: relationships.length });
+      // Run relationship inference across all models
+      try {
+        const inferredRelationships = await graphBuilder.inferRelationships(parsedSchemas);
+        graphBuilder.applyInferredRelationships(inferredRelationships);
+        console.log('Inferred relationships:', inferredRelationships.length);
+      } catch (e) {
+        console.warn('Relationship inference failed:', e);
+      }
       
-      return validateSchemaResult({ tables, relationships });
+      // Save graph to IndexedDB for future incremental updates
+      try {
+        await storage.saveGraph(graphBuilder, 'default');
+        console.log('Saved graph to IndexedDB');
+      } catch (e) {
+        console.warn('Could not save graph to IndexedDB:', e);
+      }
+      
+      // Convert graph to ERDState format
+      const erdData = graphBuilder.toERDState();
+      
+      // Store graph builder globally for lineage queries and join assistant
+      window.SQLCopilotGraph = graphBuilder;
+      
+      console.log('V2 Batch schema extraction:', { 
+        tables: erdData.tables.length, 
+        relationships: erdData.relationships.length,
+        filesProcessed,
+        filesSkipped,
+        graphStats: graphBuilder.getGraph().getStats()
+      });
+      
+      return validateSchemaResult(erdData);
     }
     
     // Special version of callOpenAI with higher token limit for schema analysis
