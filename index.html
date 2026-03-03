@@ -9314,6 +9314,30 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       updateWarningsBadge();
     }
 
+    // Clear IndexedDB cache to force fresh reparse
+    async function clearSchemaCache() {
+      try {
+        // Delete the graph database
+        await new Promise((resolve, reject) => {
+          const req = indexedDB.deleteDatabase('SQLCopilotGraphDB');
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+        
+        // Clear the global graph reference
+        window.SQLCopilotGraph = null;
+        
+        showToast('Schema cache cleared. Re-analyze to rebuild.', 'success');
+        console.log('[Cache] IndexedDB cache cleared');
+      } catch (e) {
+        console.error('Failed to clear cache:', e);
+        showToast('Failed to clear cache', 'error');
+      }
+    }
+    
+    // Expose to console for manual clearing
+    window.clearSchemaCache = clearSchemaCache;
+
     function updateWarningsBadge() {
       const total = schemaWarnings.parseErrors.length + 
                     schemaWarnings.unresolvedRefs.length + 

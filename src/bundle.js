@@ -972,8 +972,10 @@
   class MetadataGraph {
     constructor() { this.nodes = new Map(); this.edges = []; this.indexes = { nodesByType: new Map(), nodesByModel: new Map(), edgesBySource: new Map(), edgesByTarget: new Map(), edgesByType: new Map() }; }
     
-    addNode(id, type, data = {}) {
-      const node = { id, type, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    addNode(id, nodeType, data = {}) {
+      // Rename data.type to dataType to avoid collision with node's type field
+      const { type: dataType, ...restData } = data;
+      const node = { id, type: nodeType, dataType, ...restData, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       this.nodes.set(id, node); this.indexNode(node); return node;
     }
     updateNode(id, data) { const n = this.nodes.get(id); if (!n) return null; this.unindexNode(n); Object.assign(n, data, { updatedAt: new Date().toISOString() }); this.indexNode(n); return n; }
@@ -1023,7 +1025,8 @@
     indexNode(node) {
       if (!this.indexes.nodesByType.has(node.type)) this.indexes.nodesByType.set(node.type, new Set());
       this.indexes.nodesByType.get(node.type).add(node.id);
-      if (node.type === NodeType.COLUMN && node.modelId) {
+      // Index columns by their parent model - check both constant and string value
+      if ((node.type === NodeType.COLUMN || node.type === 'column') && node.modelId) {
         if (!this.indexes.nodesByModel.has(node.modelId)) this.indexes.nodesByModel.set(node.modelId, new Set());
         this.indexes.nodesByModel.get(node.modelId).add(node.id);
       }
@@ -1532,7 +1535,7 @@
         let columns = this.graph.getColumnsForModel(model.id).map(col => ({
           id: col.id,
           name: col.name,
-          type: col.type || 'VARCHAR',
+          type: col.dataType || col.type || 'VARCHAR', // dataType is the column's SQL type
           type_confidence: col.typeConfidence,
           semantic_role: col.semanticRole,
           aggregation_type: col.aggregationType,
@@ -1549,7 +1552,7 @@
           columns = model.columns.map(col => ({
             id: col.id || `col_${model.id}_${col.name}`,
             name: col.name,
-            type: col.type || 'VARCHAR',
+            type: col.dataType || col.type || 'VARCHAR',
             type_confidence: col.typeConfidence || col.type_confidence,
             semantic_role: col.semanticRole || col.semantic_role,
             aggregation_type: col.aggregationType || col.aggregation_type,
