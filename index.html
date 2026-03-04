@@ -8481,8 +8481,37 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
           .attr('font-weight', '600')
           .text(table.name);
         
-        // Add stub indicator if is_stub
-        if (table.is_stub) {
+        // Add warning badge for unexpanded SELECT * tables
+        if (table.hasUnexpandedStar) {
+          const badge = g.append('g')
+            .attr('class', 'unexpanded-warning-badge');
+          
+          badge.append('rect')
+            .attr('x', width - 72)
+            .attr('y', 8)
+            .attr('width', 60)
+            .attr('height', 16)
+            .attr('rx', 4)
+            .attr('fill', '#854d0e')
+            .attr('opacity', 0.8);
+          
+          badge.append('text')
+            .attr('x', width - 42)
+            .attr('y', 19)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#fef3c7')
+            .attr('font-size', '9px')
+            .attr('font-weight', '600')
+            .text('⚠️ partial');
+          
+          // Add tooltip title
+          const tooltipText = table.unexpandedTables?.length > 0 
+            ? `Cannot expand: ${table.unexpandedTables.join(', ')}`
+            : 'Some columns could not be fully expanded';
+          badge.append('title').text(tooltipText);
+        }
+        // Add stub indicator if is_stub (only if not warning)
+        else if (table.is_stub) {
           g.append('text')
             .attr('x', width - 65)
             .attr('y', 21)
@@ -8491,9 +8520,8 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
             .attr('font-style', 'italic')
             .text('(source)');
         }
-        
         // Add aggregated indicator with grain icon
-        if (table.is_aggregated && table.grain_columns?.length > 0) {
+        else if (table.is_aggregated && table.grain_columns?.length > 0) {
           g.append('text')
             .attr('x', width - 65)
             .attr('y', 21)
@@ -8597,22 +8625,33 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
             iconX += 16;
           }
 
-          // Column name
-          colG.append('text')
+          // Column name (with special styling for unexpanded SELECT *)
+          const colNameText = colG.append('text')
             .attr('x', iconX + 4)
             .attr('y', 16)
-            .attr('fill', col.primaryKey ? '#f59e0b' : col.foreignKey ? '#6366f1' : '#e5e7eb')
             .attr('font-size', '12px')
-            .attr('font-family', 'JetBrains Mono, monospace')
-            .text(col.name);
+            .attr('font-family', 'JetBrains Mono, monospace');
+          
+          if (col.isUnexpandedStar) {
+            // Unexpanded SELECT * column - show with warning icon and yellow styling
+            colNameText
+              .attr('fill', '#eab308')
+              .attr('font-style', 'italic')
+              .text(`⚠️ ${col.name}`);
+          } else {
+            colNameText
+              .attr('fill', col.primaryKey ? '#f59e0b' : col.foreignKey ? '#6366f1' : '#e5e7eb')
+              .text(col.name);
+          }
 
           // Column type
           colG.append('text')
             .attr('x', width - 12)
             .attr('y', 16)
             .attr('text-anchor', 'end')
-            .attr('fill', '#6b7280')
+            .attr('fill', col.isUnexpandedStar ? '#ca8a04' : '#6b7280')
             .attr('font-size', '10px')
+            .attr('font-style', col.isUnexpandedStar ? 'italic' : 'normal')
             .text(col.type.substring(0, 8));
         });
 
@@ -13072,11 +13111,34 @@ If action is unknown, set message to explain what went wrong.`,
         graphBuilder = new GraphBuilder(new MetadataGraph());
       }
       
+      // Helper function to detect layer from file path
+      const getLayerFromPath = (path) => {
+        const lower = path.toLowerCase();
+        if (lower.includes('/bronze/') || lower.includes('\\bronze\\') || lower.includes('/raw/') || lower.includes('\\raw\\')) return 'bronze';
+        if (lower.includes('/silver/') || lower.includes('\\silver\\') || lower.includes('/staging/') || lower.includes('\\staging\\')) return 'silver';
+        if (lower.includes('/gold/') || lower.includes('\\gold\\')) return 'gold';
+        return 'unknown';
+      };
+      
+      // Sort files by layer to ensure dependencies are processed first: Bronze → Silver → Gold
+      const layerOrder = { bronze: 0, silver: 1, gold: 2, unknown: 3 };
+      const sortedFiles = [...sqlFiles].sort((a, b) => {
+        const layerA = getLayerFromPath(a.path);
+        const layerB = getLayerFromPath(b.path);
+        const orderA = layerOrder[layerA] !== undefined ? layerOrder[layerA] : 99;
+        const orderB = layerOrder[layerB] !== undefined ? layerOrder[layerB] : 99;
+        if (orderA !== orderB) return orderA - orderB;
+        // Within same layer, sort alphabetically for deterministic order
+        return a.path.localeCompare(b.path);
+      });
+      
+      console.log('Processing files in order:', sortedFiles.map(f => f.path));
+      
       const parsedSchemas = []; // Collect all schemas for relationship inference
       let filesProcessed = 0;
       let filesSkipped = 0;
       
-      for (const file of sqlFiles) {
+      for (const file of sortedFiles) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         
         const fileName = file.path.split(/[/\\]/).pop().replace(/\.sql$/i, '');
@@ -13134,6 +13196,13 @@ If action is unknown, set message to explain what went wrong.`,
           schema.filePath = file.path;
           schema.tableType = file.tableType || schema.layer || 'raw';
           schema.description = schema.description || `Extracted from ${file.path}`;
+          
+          // Check for unexpanded SELECT * columns
+          const unexpandedStarCols = schema.columns.filter(c => c.isUnexpandedStar);
+          if (unexpandedStarCols.length > 0) {
+            schema.hasUnexpandedStar = true;
+            schema.unexpandedTables = [...new Set(unexpandedStarCols.map(c => c.sourceColumns).flat())];
+          }
           
           // Add to graph builder (creates nodes and edges)
           graphBuilder.addModel(schema);
