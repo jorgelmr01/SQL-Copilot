@@ -375,6 +375,14 @@
       this.warnings = [];
       const targetTable = ir.targetTable || ir.targetView || { table: modelName };
       
+      // Extract schema prefix and table name
+      const tableName = targetTable.table || modelName;
+      const schemaName = targetTable.schema || null;
+      
+      // Detect layer from schema prefix (bronze.*, silver.*, gold.*)
+      const detectedLayer = this.detectLayerFromSchema(schemaName, tableName);
+      const finalLayer = layer || detectedLayer;
+      
       // Build alias-to-table mapping for SELECT * expansion
       const aliasMap = this.buildAliasMap(ir);
       
@@ -387,12 +395,45 @@
       const filters = (ir.filters || []).map(f => ({ expression: f, sql: renderExpression(f), columns: this.extractSrcCols(f) }));
 
       return {
-        id: `model_${this.hash(modelName.toLowerCase())}`, name: targetTable.table || modelName, schema: targetTable.schema || null,
-        database: targetTable.database || null, description, layer, columns, grainColumns, isAggregated, dependencies: deps,
+        id: `model_${this.hash(tableName.toLowerCase())}`, name: tableName, schema: schemaName,
+        database: targetTable.database || null, description, layer: finalLayer, columns, grainColumns, isAggregated, dependencies: deps,
         joinMetadata: joinMeta, filters, filtersNormalized: filters.map(f => f.sql), sourceType: ir.type,
         hasPartialLineage: ir.isPartial || this.warnings.length > 0, extractedAt: new Date().toISOString(),
         warnings: this.warnings.length > 0 ? [...this.warnings] : undefined
       };
+    }
+
+    detectLayerFromSchema(schemaName, tableName) {
+      // Map schema names to medallion architecture layers
+      if (!schemaName && !tableName) return null;
+      
+      const schema = (schemaName || '').toLowerCase();
+      const table = (tableName || '').toLowerCase();
+      
+      // Bronze/Raw layer
+      if (schema === 'bronze' || schema === 'raw' || table.startsWith('raw_') || table.startsWith('bronze_')) {
+        return 'raw';
+      }
+      
+      // Silver/Staging layer
+      if (schema === 'silver' || schema === 'staging' || schema === 'stg' || 
+          table.startsWith('stg_') || table.startsWith('silver_') || table.startsWith('staging_')) {
+        return 'staging';
+      }
+      
+      // Gold layer - distinguish between dimensions, facts, and aggregates
+      if (schema === 'gold' || schema === 'curated' || schema === 'analytics' || schema === 'mart') {
+        if (table.startsWith('dim_')) return 'dimension';
+        if (table.startsWith('fact_')) return 'fact';
+        if (table.startsWith('agg_') || table.includes('_summary') || table.includes('_rollup')) return 'aggregate';
+        return 'gold';
+      }
+      
+      // Detect from table naming patterns only
+      if (table.startsWith('dim_')) return 'dimension';
+      if (table.startsWith('fact_')) return 'fact';
+      
+      return null;
     }
 
     // Build mapping of aliases to actual table names
@@ -616,7 +657,18 @@
         }
       }
       
-      return columns;
+      // Deduplicate columns by name (case-insensitive), keep first occurrence
+      const seen = new Set();
+      const deduplicated = [];
+      for (const col of columns) {
+        const key = col.name.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduplicated.push(col);
+        }
+      }
+      
+      return deduplicated;
     }
     
     classifyRoleByName(name) {

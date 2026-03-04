@@ -2175,7 +2175,7 @@
                   </label>
                   <div class="w-px h-6 bg-surface-lighter mx-2"></div>
                   <label class="flex items-center gap-2 text-sm cursor-pointer" title="Show all SQL files from all subfolders">
-                    <input type="checkbox" id="library-deep-scan" class="accent-accent" onchange="toggleDeepScan()">
+                    <input type="checkbox" id="library-deep-scan" class="accent-accent" onchange="toggleDeepScan()" checked>
                     <span class="material-symbols-outlined text-sm text-accent">account_tree</span>
                     All nested
                   </label>
@@ -11617,7 +11617,7 @@ If action is unknown, set message to explain what went wrong.`,
       activeFile: null,
       metadata: { files: {} },
       initialized: false,
-      deepScanEnabled: false,
+      deepScanEnabled: true,  // Enable by default to scan bronze/, silver/, gold/ subdirectories
       contentCache: {}  // path -> first 2000 chars of content
     };
 
@@ -13111,8 +13111,12 @@ If action is unknown, set message to explain what went wrong.`,
             continue;
           }
           
+          // Extract table name from CREATE TABLE statement, fallback to filename
+          const targetTable = ir.targetTable || ir.targetView || {};
+          const modelName = targetTable.table || fileName;
+          
           // Extract schema
-          const schema = extractor.extract(ir, fileName, { layer: file.tableType });
+          const schema = extractor.extract(ir, modelName, { layer: file.tableType });
           
           // Collect extraction warnings
           const extractorWarnings = extractor.getWarnings();

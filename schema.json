@@ -1,30 +1,130 @@
 {
   "tables": [
     {
-      "id": "table_5oo5o7",
-      "name": "Untitled-1",
-      "tableType": "raw",
-      "schema_source": "compiler_v2",
-      "is_stub": false,
-      "is_aggregated": false,
-      "grain_columns": [],
-      "x": 100,
-      "y": 100,
-      "columns": [],
-      "description": "Extracted from Untitled-1.sql"
-    },
-    {
-      "id": "table_m067xn",
-      "name": "customer_logins",
+      "id": "table_uvxrwk",
+      "name": "stg_customers",
       "tableType": "unknown",
       "schema_source": "compiler_v2",
       "is_stub": true,
       "is_aggregated": false,
       "grain_columns": [],
-      "x": 350,
-      "y": 100,
+      "x": -332.5282223461018,
+      "y": -346.7237873440855,
       "columns": [],
-      "description": ""
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 0,
+      "vy": -3.364308273580833,
+      "vx": -3.48549335314279
+    },
+    {
+      "id": "table_rydfbd",
+      "name": "stg_addresses",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 230.72732737202165,
+      "y": -425.4502063476543,
+      "columns": [],
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 1,
+      "vy": -4.0208364194613235,
+      "vx": -1.06133255492719
+    },
+    {
+      "id": "table_80r9y6",
+      "name": "stg_orders",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 744.2871565510324,
+      "y": -396.13837995025244,
+      "columns": [],
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 2,
+      "vy": -3.7914707432590142,
+      "vx": 1.1111933181036278
+    },
+    {
+      "id": "table_wa2ve",
+      "name": "stg_order_items",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 1250.6109831361393,
+      "y": -309.42760832376365,
+      "columns": [],
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 3,
+      "vy": -3.096237480001388,
+      "vx": 3.2681848050350957
+    },
+    {
+      "id": "table_4j7hf",
+      "name": "stg_products",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": -402.53744891763097,
+      "y": 177.53031049657756,
+      "columns": [],
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 4,
+      "vy": -0.8345279315204047,
+      "vx": -4.094857484727982
+    },
+    {
+      "id": "table_glm36k",
+      "name": "products",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 234.85446233361938,
+      "y": 180.70180539013688,
+      "columns": [],
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 5,
+      "vy": -0.820839602176854,
+      "vx": -1.0618810522115703
+    },
+    {
+      "id": "table_lfwun0",
+      "name": "categories",
+      "tableType": "unknown",
+      "schema_source": "compiler_v2",
+      "is_stub": true,
+      "is_aggregated": false,
+      "grain_columns": [],
+      "x": 799.438809847688,
+      "y": 265.2867772070974,
+      "columns": [],
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 6,
+      "vy": -0.23872091720589958,
+      "vx": 1.4199648498546618
     },
     {
       "id": "table_htz0ki",
@@ -36,36 +136,390 @@
       "grain_columns": [
         "customer_id"
       ],
-      "x": 600,
-      "y": 100,
-      "columns": [],
-      "description": "Extracted from 01_customers.sql"
-    },
-    {
-      "id": "table_uvxrwk",
-      "name": "stg_customers",
-      "tableType": "unknown",
-      "schema_source": "compiler_v2",
-      "is_stub": true,
-      "is_aggregated": false,
-      "grain_columns": [],
-      "x": 850,
-      "y": 100,
-      "columns": [],
-      "description": ""
-    },
-    {
-      "id": "table_rydfbd",
-      "name": "stg_addresses",
-      "tableType": "unknown",
-      "schema_source": "compiler_v2",
-      "is_stub": true,
-      "is_aggregated": false,
-      "grain_columns": [],
-      "x": 100,
-      "y": 300,
-      "columns": [],
-      "description": ""
+      "x": 1301.7236078957383,
+      "y": 408.1119832334366,
+      "columns": [
+        {
+          "id": "col_9d1fuc",
+          "name": "customer_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.customer_id",
+          "source_columns": [
+            "c.customer_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_dh4f5i",
+          "name": "first_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.first_name",
+          "source_columns": [
+            "c.first_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_em3qbo",
+          "name": "last_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.last_name",
+          "source_columns": [
+            "c.last_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_2zw4r0",
+          "name": "email",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.email",
+          "source_columns": [
+            "c.email"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_35uyu6",
+          "name": "phone",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.phone",
+          "source_columns": [
+            "c.phone"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_bu71x6",
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.created_at",
+          "source_columns": [
+            "c.created_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_ifgyji",
+          "name": "address_line1",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.address_line1",
+          "source_columns": [
+            "a.address_line1"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_6s0pad",
+          "name": "city",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.city",
+          "source_columns": [
+            "a.city"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_37pq81",
+          "name": "state",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.state",
+          "source_columns": [
+            "a.state"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_asmlmu",
+          "name": "country",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.country",
+          "source_columns": [
+            "a.country"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_e0gkhb",
+          "name": "postal_code",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.postal_code",
+          "source_columns": [
+            "a.postal_code"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_om3vsb",
+          "name": "full_name",
+          "type": "UNKNOWN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.first_name || ' ' || c.last_name",
+          "description": ""
+        },
+        {
+          "id": "col_2zw4r0",
+          "name": "email",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.email",
+          "source_columns": [
+            "c.email"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_35uyu6",
+          "name": "phone",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.phone",
+          "source_columns": [
+            "c.phone"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_ifgyjh",
+          "name": "address_line2",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.address_line2",
+          "source_columns": [
+            "a.address_line2"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_6s0pad",
+          "name": "city",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.city",
+          "source_columns": [
+            "a.city"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_37pq81",
+          "name": "state",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.state",
+          "source_columns": [
+            "a.state"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_asmlmu",
+          "name": "country",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.country",
+          "source_columns": [
+            "a.country"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_e0gkhb",
+          "name": "postal_code",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "a.postal_code",
+          "source_columns": [
+            "a.postal_code"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_t74fhe",
+          "name": "customer_segment",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CASE WHEN DATEDIFF('year', c.created_at, CURRENT_DATE) >  = 5 THEN 'Loyal' WHEN DATEDIFF('year', c.created_at, CURRENT_DATE) >  = 1 THEN 'Regular' ELSE 'New' END",
+          "source_columns": [
+            "c.created_at",
+            "CURRENT_DATE",
+            "c.created_at",
+            "CURRENT_DATE"
+          ],
+          "description": "",
+          "type_confidence": 1
+        },
+        {
+          "id": "col_yjd9lh",
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.is_active",
+          "source_columns": [
+            "c.is_active"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_sk9r8p",
+          "name": "customer_since",
+          "type": "TIMESTAMP",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.created_at",
+          "source_columns": [
+            "c.created_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_fedffi",
+          "name": "last_updated",
+          "type": "TIMESTAMP",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.updated_at",
+          "source_columns": [
+            "c.updated_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_fpbptb",
+          "name": "dim_created_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CURRENT_TIMESTAMP",
+          "source_columns": [
+            "CURRENT_TIMESTAMP"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_rseify",
+          "name": "dim_updated_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CURRENT_TIMESTAMP",
+          "source_columns": [
+            "CURRENT_TIMESTAMP"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        }
+      ],
+      "description": "Extracted from 01_customers.sql",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 7,
+      "vy": 1.2015087135600508,
+      "vx": 3.534523333163787
     },
     {
       "id": "table_lzjenc",
@@ -75,49 +529,342 @@
       "is_stub": false,
       "is_aggregated": false,
       "grain_columns": [],
-      "x": 350,
-      "y": 300,
-      "columns": [],
-      "description": "Extracted from 02_orders.sql"
-    },
-    {
-      "id": "table_80r9y6",
-      "name": "stg_orders",
-      "tableType": "unknown",
-      "schema_source": "compiler_v2",
-      "is_stub": true,
-      "is_aggregated": false,
-      "grain_columns": [],
-      "x": 600,
-      "y": 300,
-      "columns": [],
-      "description": ""
-    },
-    {
-      "id": "table_wa2ve",
-      "name": "stg_order_items",
-      "tableType": "unknown",
-      "schema_source": "compiler_v2",
-      "is_stub": true,
-      "is_aggregated": false,
-      "grain_columns": [],
-      "x": 850,
-      "y": 300,
-      "columns": [],
-      "description": ""
-    },
-    {
-      "id": "table_4j7hf",
-      "name": "stg_products",
-      "tableType": "unknown",
-      "schema_source": "compiler_v2",
-      "is_stub": true,
-      "is_aggregated": false,
-      "grain_columns": [],
-      "x": 100,
-      "y": 500,
-      "columns": [],
-      "description": ""
+      "x": -378.32769858575716,
+      "y": 660.8207873607338,
+      "columns": [
+        {
+          "id": "col_f3ocle",
+          "name": "order_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.order_id",
+          "source_columns": [
+            "o.order_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_6stlxi",
+          "name": "customer_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.customer_id",
+          "source_columns": [
+            "o.customer_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_mtxtp1",
+          "name": "order_date",
+          "type": "DATE",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.order_date",
+          "source_columns": [
+            "o.order_date"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_1khvns",
+          "name": "status",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.status",
+          "source_columns": [
+            "o.status"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_e3xflj",
+          "name": "total_amount",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "measure",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.total_amount",
+          "source_columns": [
+            "o.total_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_rr2fr4",
+          "name": "discount_amount",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.discount_amount",
+          "source_columns": [
+            "o.discount_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_l3utvx",
+          "name": "shipping_amount",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.shipping_amount",
+          "source_columns": [
+            "o.shipping_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_vicjm",
+          "name": "tax_amount",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.tax_amount",
+          "source_columns": [
+            "o.tax_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_1e3o6o",
+          "name": "net_amount",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.net_amount",
+          "source_columns": [
+            "o.net_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_vpj9xb",
+          "name": "product_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.product_id",
+          "source_columns": [
+            "p.product_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_e579r",
+          "name": "product_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.product_name",
+          "source_columns": [
+            "p.product_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_9hp1i2",
+          "name": "category_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.category_id",
+          "source_columns": [
+            "p.category_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_qk96qn",
+          "name": "quantity",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "oi.quantity",
+          "source_columns": [
+            "oi.quantity"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_irkv4s",
+          "name": "unit_price",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "oi.unit_price",
+          "source_columns": [
+            "oi.unit_price"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_cx6hfz",
+          "name": "line_total",
+          "type": "VARCHAR",
+          "semantic_role": "measure",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "oi.line_total",
+          "source_columns": [
+            "oi.line_total"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_2zweps",
+          "name": "order_item_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "oi.order_item_id",
+          "source_columns": [
+            "oi.order_item_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_f3ocle",
+          "name": "order_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.order_id",
+          "source_columns": [
+            "o.order_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_6stlxi",
+          "name": "customer_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.customer_id",
+          "source_columns": [
+            "o.customer_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_mtxtp1",
+          "name": "order_date",
+          "type": "DATE",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "o.order_date",
+          "source_columns": [
+            "o.order_date"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_2dt01z",
+          "name": "order_month",
+          "type": "TIMESTAMP",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "DATE_TRUNC('month', o.order_date)",
+          "source_columns": [
+            "o.order_date"
+          ],
+          "description": "",
+          "type_confidence": 0.9
+        },
+        {
+          "id": "col_r806fv",
+          "name": "order_quarter",
+          "type": "TIMESTAMP",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "DATE_TRUNC('quarter', o.order_date)",
+          "source_columns": [
+            "o.order_date"
+          ],
+          "description": "",
+          "type_confidence": 0.9
+        },
+        {
+          "id": "col_6ouhra",
+          "name": "EXTRACT(year",
+          "type": "UNKNOWN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "EXTRACT(year",
+          "description": ""
+        }
+      ],
+      "description": "Extracted from 02_orders.sql",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 8,
+      "vy": 1.4876850183801045,
+      "vx": -3.875231520105568
     },
     {
       "id": "table_qdplwg",
@@ -127,23 +874,457 @@
       "is_stub": false,
       "is_aggregated": false,
       "grain_columns": [],
-      "x": 350,
-      "y": 500,
-      "columns": [],
-      "description": "Extracted from 03_products.sql"
+      "x": 304.0772426990841,
+      "y": 734.3052545170087,
+      "columns": [
+        {
+          "id": "col_sgak8p",
+          "name": "product_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "product_id",
+          "source_columns": [
+            "product_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_3ybl07",
+          "name": "product_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "product_name",
+          "source_columns": [
+            "product_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_p23v1a",
+          "name": "product_description",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "product_description",
+          "source_columns": [
+            "product_description"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_8q2ib2",
+          "name": "category_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "category_id",
+          "source_columns": [
+            "category_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_7c9bkx",
+          "name": "brand_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "brand_id",
+          "source_columns": [
+            "brand_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_tmv2xw",
+          "name": "unit_price",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "unit_price",
+          "source_columns": [
+            "unit_price"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_32st7p",
+          "name": "cost_price",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cost_price",
+          "source_columns": [
+            "cost_price"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_c8bnq6",
+          "name": "stock_quantity",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "stock_quantity",
+          "source_columns": [
+            "stock_quantity"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_bmb9m5",
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "is_active",
+          "source_columns": [
+            "is_active"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_m42hyw",
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "created_at",
+          "source_columns": [
+            "created_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_5fbbqz",
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "updated_at",
+          "source_columns": [
+            "updated_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_squzld",
+          "name": "sku",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.sku",
+          "source_columns": [
+            "p.sku"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_8q2ib2",
+          "name": "category_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.category_id",
+          "source_columns": [
+            "p.category_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_29rffi",
+          "name": "category_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.category_name",
+          "source_columns": [
+            "c.category_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_c18f4b",
+          "name": "parent_category_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.parent_category_id",
+          "source_columns": [
+            "c.parent_category_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_d3ojfp",
+          "name": "parent_category_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "pc.category_name",
+          "source_columns": [
+            "pc.category_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_7c9bkx",
+          "name": "brand_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.brand_id",
+          "source_columns": [
+            "p.brand_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_tmv2xw",
+          "name": "unit_price",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.unit_price",
+          "source_columns": [
+            "p.unit_price"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_32st7p",
+          "name": "cost_price",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.cost_price",
+          "source_columns": [
+            "p.cost_price"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_4pt2tt",
+          "name": "unit_profit",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.unit_price - p.cost_price",
+          "source_columns": [
+            "p.unit_price",
+            "p.cost_price"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_oe2her",
+          "name": "profit_margin_pct",
+          "type": "UNKNOWN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CASE WHEN p.unit_price > 0 THEN (p.unit_price - p.cost_price) / p.unit_price ELSE 0 END",
+          "source_columns": [
+            "p.unit_price",
+            "p.unit_price"
+          ],
+          "description": ""
+        },
+        {
+          "id": "col_c8bnq6",
+          "name": "stock_quantity",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.stock_quantity",
+          "source_columns": [
+            "p.stock_quantity"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_o8n95a",
+          "name": "reorder_level",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.reorder_level",
+          "source_columns": [
+            "p.reorder_level"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_j1cqt3",
+          "name": "stock_status",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CASE WHEN p.stock_quantity <  = 0 THEN 'Out of Stock' WHEN p.stock_quantity <  = p.reorder_level THEN 'Low Stock' ELSE 'In Stock' END",
+          "source_columns": [
+            "p.stock_quantity",
+            "p.stock_quantity",
+            "p.reorder_level"
+          ],
+          "description": "",
+          "type_confidence": 1
+        },
+        {
+          "id": "col_bmb9m5",
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.is_active",
+          "source_columns": [
+            "p.is_active"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_m42hyw",
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.created_at",
+          "source_columns": [
+            "p.created_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_5fbbqz",
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.updated_at",
+          "source_columns": [
+            "p.updated_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_w1epan",
+          "name": "dim_created_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CURRENT_TIMESTAMP",
+          "source_columns": [
+            "CURRENT_TIMESTAMP"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        }
+      ],
+      "description": "Extracted from 03_products.sql",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 9,
+      "vy": 1.989259846453308,
+      "vx": -0.5309436913449763
     },
     {
-      "id": "table_glm36k",
-      "name": "products",
+      "id": "table_dhos7p",
+      "name": "stg_categories",
       "tableType": "unknown",
       "schema_source": "compiler_v2",
       "is_stub": true,
       "is_aggregated": false,
       "grain_columns": [],
-      "x": 600,
-      "y": 500,
+      "x": 905.1776581335528,
+      "y": 872.0402014989357,
       "columns": [],
-      "description": ""
+      "description": "",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 10,
+      "vy": 3.28087101079586,
+      "vx": 2.458954903157237
     },
     {
       "id": "table_nzbb7c",
@@ -155,12 +1336,155 @@
       "grain_columns": [
         "1",
         "2",
-        "3"
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
       ],
-      "x": 850,
-      "y": 500,
-      "columns": [],
-      "description": "Extracted from 04_sales_summary.sql"
+      "x": 1716.8852032466684,
+      "y": 180.0654474216979,
+      "columns": [
+        {
+          "id": "col_o9vddi",
+          "name": "month",
+          "type": "TIMESTAMP",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "DATE_TRUNC('month', o.order_date)",
+          "source_columns": [
+            "o.order_date"
+          ],
+          "description": "",
+          "type_confidence": 0.9
+        },
+        {
+          "id": "col_xzhpsw",
+          "name": "country",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "c.country",
+          "source_columns": [
+            "c.country"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_46w5ty",
+          "name": "category_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "p.category_id",
+          "source_columns": [
+            "p.category_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_b5aeeg",
+          "name": "order_count",
+          "type": "BIGINT",
+          "semantic_role": "measure",
+          "aggregation_type": "count_distinct",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "COUNT(DISTINCT o.order_id)",
+          "source_columns": [
+            "o.order_id"
+          ],
+          "description": "",
+          "type_confidence": 1
+        },
+        {
+          "id": "col_1ve1es",
+          "name": "customer_count",
+          "type": "BIGINT",
+          "semantic_role": "measure",
+          "aggregation_type": "count_distinct",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "COUNT(DISTINCT o.customer_id)",
+          "source_columns": [
+            "o.customer_id"
+          ],
+          "description": "",
+          "type_confidence": 1
+        },
+        {
+          "id": "col_u7oje3",
+          "name": "total_revenue",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "measure",
+          "aggregation_type": "sum",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "SUM(o.total_amount)",
+          "source_columns": [
+            "o.total_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_ozh0tb",
+          "name": "total_discounts",
+          "type": "DECIMAL(18,2)",
+          "semantic_role": "measure",
+          "aggregation_type": "sum",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "SUM(o.discount_amount)",
+          "source_columns": [
+            "o.discount_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.6
+        },
+        {
+          "id": "col_996fx",
+          "name": "avg_order_value",
+          "type": "DOUBLE",
+          "semantic_role": "measure",
+          "aggregation_type": "avg",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "AVG(o.total_amount)",
+          "source_columns": [
+            "o.total_amount"
+          ],
+          "description": "",
+          "type_confidence": 0.9
+        },
+        {
+          "id": "col_8p9i9y",
+          "name": "EXTRACT(year",
+          "type": "UNKNOWN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "EXTRACT(year",
+          "description": ""
+        }
+      ],
+      "description": "Extracted from 04_sales_summary.sql",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 11,
+      "vy": -0.3718891230803297,
+      "vx": 4.868873280903313
     },
     {
       "id": "table_802099",
@@ -170,51 +1494,271 @@
       "is_stub": false,
       "is_aggregated": false,
       "grain_columns": [],
-      "x": 100,
-      "y": 700,
-      "columns": [],
-      "description": "Extracted from 05_categories.sql"
+      "x": -259.83859903957165,
+      "y": 1154.7793269156773,
+      "columns": [
+        {
+          "id": "col_2aam69",
+          "name": "category_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.category_id",
+          "source_columns": [
+            "cat.category_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_550kzz",
+          "name": "category_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.category_name",
+          "source_columns": [
+            "cat.category_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_wbq5by",
+          "name": "parent_category_id",
+          "type": "BIGINT",
+          "semantic_role": "key",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.parent_category_id",
+          "source_columns": [
+            "cat.parent_category_id"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_oip58u",
+          "name": "parent_category_name",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "parent.category_name",
+          "source_columns": [
+            "parent.category_name"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_jd3oox",
+          "name": "description",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.description",
+          "source_columns": [
+            "cat.description"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_44p3k0",
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.is_active",
+          "source_columns": [
+            "cat.is_active"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_haatia",
+          "name": "category_level",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.category_level",
+          "source_columns": [
+            "cat.category_level"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_54zaut",
+          "name": "category_path",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.category_path",
+          "source_columns": [
+            "cat.category_path"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_jd3oox",
+          "name": "description",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.description",
+          "source_columns": [
+            "cat.description"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_z25pm2",
+          "name": "display_order",
+          "type": "VARCHAR",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.display_order",
+          "source_columns": [
+            "cat.display_order"
+          ],
+          "description": "",
+          "type_confidence": 0.3
+        },
+        {
+          "id": "col_a7yjwf",
+          "name": "is_root_category",
+          "type": "BOOLEAN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CASE WHEN cat.parent_category_id IS NULL THEN true ELSE false END",
+          "description": "",
+          "type_confidence": 1
+        },
+        {
+          "id": "col_r2hlgg",
+          "name": "is_top_level",
+          "type": "BOOLEAN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CASE WHEN cat.category_level = 1 THEN true ELSE false END",
+          "source_columns": [
+            "cat.category_level"
+          ],
+          "description": "",
+          "type_confidence": 1
+        },
+        {
+          "id": "col_44p3k0",
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "semantic_role": "unknown",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.is_active",
+          "source_columns": [
+            "cat.is_active"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_v2jjid",
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.created_at",
+          "source_columns": [
+            "cat.created_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_3j5psi",
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "cat.updated_at",
+          "source_columns": [
+            "cat.updated_at"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        },
+        {
+          "id": "col_femhwc",
+          "name": "dim_created_at",
+          "type": "TIMESTAMP",
+          "semantic_role": "timestamp",
+          "aggregation_type": "none",
+          "is_grain": false,
+          "nullable": null,
+          "expression_sql_original": "CURRENT_TIMESTAMP",
+          "source_columns": [
+            "CURRENT_TIMESTAMP"
+          ],
+          "description": "",
+          "type_confidence": 0.7
+        }
+      ],
+      "description": "Extracted from 05_categories.sql",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 12,
+      "vy": 3.8622045207862383,
+      "vx": -2.861411415077334
     },
     {
-      "id": "table_lfwun0",
-      "name": "categories",
-      "tableType": "unknown",
-      "schema_source": "compiler_v2",
-      "is_stub": true,
-      "is_aggregated": false,
-      "grain_columns": [],
-      "x": 350,
-      "y": 700,
-      "columns": [],
-      "description": ""
-    },
-    {
-      "id": "table_htrhmm",
-      "name": "06_customer_orders_cte",
+      "id": "table_tn5xs5",
+      "name": "dim_customer_lifetime_value",
       "tableType": "raw",
       "schema_source": "compiler_v2",
       "is_stub": false,
       "is_aggregated": false,
-      "grain_columns": [
-        "customer_id"
-      ],
-      "x": 600,
-      "y": 700,
-      "columns": [],
-      "description": "Extracted from 06_customer_orders_cte.sql"
-    },
-    {
-      "id": "table_yfxc69",
-      "name": "customer_segments",
-      "tableType": "unknown",
-      "schema_source": "compiler_v2",
-      "is_stub": true,
-      "is_aggregated": false,
       "grain_columns": [],
-      "x": 850,
-      "y": 700,
+      "x": 381.39779478703736,
+      "y": 1254.0835960271,
       "columns": [],
-      "description": ""
+      "description": "Extracted from 06_customer_orders_cte.sql",
+      "highlighted": false,
+      "dimmed": false,
+      "index": 13,
+      "vy": 4.702809482956274,
+      "vx": 0.2577336948402888
     }
   ],
   "relationships": [
@@ -230,7 +1774,7 @@
       },
       "type": "join",
       "join_type": "LEFT",
-      "on_sql": "c.customer_id = a.customer_id",
+      "on_sql": "c.customer_id = a.customer_id AND a.is_primary = true",
       "relationship_role": "join_path",
       "cardinality": "many-to-one",
       "cardinality_confidence": 0.5,
@@ -333,18 +1877,56 @@
       "confidence": 0.7
     },
     {
-      "id": "rel_h32lfn",
+      "id": "rel_dq5otc",
       "from": {
-        "table": "06_customer_orders_cte",
-        "column": "customer_id"
+        "table": "03_products",
+        "column": "parent_category_id"
       },
       "to": {
-        "table": "customer_segments",
-        "column": "customer_id"
+        "table": "stg_categories",
+        "column": "category_id"
       },
       "type": "join",
-      "join_type": "INNER",
-      "on_sql": "c.customer_id = cs.customer_id",
+      "join_type": "LEFT",
+      "on_sql": "c.parent_category_id = pc.category_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_bzd8zm",
+      "from": {
+        "table": "04_sales_summary",
+        "column": "product_id"
+      },
+      "to": {
+        "table": "03_products",
+        "column": "product_id"
+      },
+      "type": "join",
+      "join_type": "LEFT",
+      "on_sql": "o.product_id = p.product_id",
+      "relationship_role": "join_path",
+      "cardinality": "many-to-one",
+      "cardinality_confidence": 0.5,
+      "cardinality_basis": "heuristic",
+      "confidence": 0.7
+    },
+    {
+      "id": "rel_2hrg4t",
+      "from": {
+        "table": "dim_categories",
+        "column": "parent_category_id"
+      },
+      "to": {
+        "table": "stg_categories",
+        "column": "category_id"
+      },
+      "type": "join",
+      "join_type": "LEFT",
+      "on_sql": "cat.parent_category_id = parent.category_id",
       "relationship_role": "join_path",
       "cardinality": "many-to-one",
       "cardinality_confidence": 0.5,

@@ -1,0 +1,10 @@
+{
+  "files": {
+    "01_customers.sql": {
+      "tableType": "gold"
+    },
+    "02_orders.sql": {
+      "tableType": "gold"
+    }
+  }
+}
