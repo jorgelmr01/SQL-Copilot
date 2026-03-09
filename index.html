@@ -48,6 +48,8 @@
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <!-- SQL Copilot v2 Compiler Modules -->
   <script src="src/bundle.js"></script>
+  <!-- SQL Template Library -->
+  <script src="src/templates.js"></script>
   <style>
     * {
       font-family: 'Noto Sans', sans-serif;
@@ -2354,6 +2356,9 @@
                   <div class="w-px h-6 bg-surface-lighter mx-2"></div>
                   <button onclick="showMergeTablesModal()" class="p-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg transition-colors" title="Merge Tables">
                     <span class="material-symbols-outlined text-sm">merge</span>
+                  </button>
+                  <button onclick="showTemplateLibrary()" class="p-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg transition-colors" title="SQL Templates">
+                    <span class="material-symbols-outlined text-sm">code_blocks</span>
                   </button>
                   <button id="show-related-btn" onclick="showRelatedTables()" class="p-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg transition-colors" title="Show Related Tables">
                     <span class="material-symbols-outlined text-sm">hub</span>
@@ -9280,6 +9285,320 @@ LIMIT 100;`;
         });
         renderERD();
       }, 3000);
+    }
+
+    // ==================== SQL TEMPLATE LIBRARY ====================
+    function showTemplateLibrary() {
+      const modal = document.createElement('div');
+      modal.id = 'template-library-modal';
+      modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-surface rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div class="flex items-center justify-between p-4 border-b border-surface-lighter">
+            <div>
+              <h2 class="text-xl font-bold flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">code_blocks</span>
+                SQL Template Library
+              </h2>
+              <p class="text-sm text-gray-400 mt-1">Pre-built patterns for common data engineering tasks</p>
+            </div>
+            <button onclick="document.getElementById('template-library-modal').remove()" 
+                    class="text-gray-400 hover:text-white transition-colors">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          
+          <div class="flex flex-1 overflow-hidden">
+            <!-- Category Sidebar -->
+            <div class="w-64 border-r border-surface-lighter overflow-y-auto bg-surface-light">
+              <div class="p-4">
+                <input type="text" id="template-search" placeholder="Search templates..." 
+                       class="w-full bg-surface border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                       oninput="filterTemplates(this.value)">
+              </div>
+              <div id="template-categories" class="px-2 pb-4"></div>
+            </div>
+            
+            <!-- Template Content -->
+            <div class="flex-1 overflow-y-auto p-6">
+              <div id="template-content" class="space-y-4"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      renderTemplateCategories();
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+    
+    function renderTemplateCategories() {
+      const categoriesDiv = document.getElementById('template-categories');
+      const categories = {
+        'ETL': { icon: 'sync_alt', templates: [] },
+        'Dimensional Modeling': { icon: 'view_in_ar', templates: [] },
+        'Data Quality': { icon: 'verified', templates: [] },
+        'Analytics': { icon: 'analytics', templates: [] },
+        'Medallion Architecture': { icon: 'layers', templates: [] },
+        'Advanced Analytics': { icon: 'psychology', templates: [] }
+      };
+      
+      // Organize templates by category
+      Object.entries(window.SQLTemplates).forEach(([groupKey, group]) => {
+        Object.entries(group).forEach(([templateKey, template]) => {
+          const category = template.category;
+          if (categories[category]) {
+            categories[category].templates.push({ key: `${groupKey}.${templateKey}`, ...template });
+          }
+        });
+      });
+      
+      // Render categories
+      Object.entries(categories).forEach(([categoryName, categoryData]) => {
+        if (categoryData.templates.length === 0) return;
+        
+        const categoryDiv = document.createElement('div');
+        categoryDiv.className = 'mb-2';
+        categoryDiv.innerHTML = `
+          <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">${categoryData.icon}</span>
+            ${categoryName}
+          </div>
+        `;
+        
+        categoryData.templates.forEach(template => {
+          const templateBtn = document.createElement('button');
+          templateBtn.className = 'template-item w-full px-3 py-2 text-left text-sm hover:bg-surface transition-colors rounded-lg flex items-start gap-2';
+          templateBtn.dataset.templateKey = template.key;
+          templateBtn.dataset.category = categoryName;
+          templateBtn.innerHTML = `
+            <span class="material-symbols-outlined text-xs mt-0.5 text-accent">description</span>
+            <span class="flex-1">${template.name}</span>
+          `;
+          templateBtn.onclick = () => showTemplateDetail(template);
+          categoryDiv.appendChild(templateBtn);
+        });
+        
+        categoriesDiv.appendChild(categoryDiv);
+      });
+    }
+    
+    function filterTemplates(query) {
+      const items = document.querySelectorAll('.template-item');
+      const lowerQuery = query.toLowerCase();
+      
+      items.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        if (text.includes(lowerQuery)) {
+          item.classList.remove('hidden');
+        } else {
+          item.classList.add('hidden');
+        }
+      });
+    }
+    
+    function showTemplateDetail(template) {
+      const contentDiv = document.getElementById('template-content');
+      contentDiv.innerHTML = `
+        <div class="space-y-4">
+          <div>
+            <h3 class="text-2xl font-bold text-white mb-2">${template.name}</h3>
+            <p class="text-gray-400">${template.description}</p>
+            <div class="flex items-center gap-4 mt-3">
+              <span class="px-3 py-1 rounded-full text-xs bg-primary/20 text-primary">${template.category}</span>
+              <span class="px-3 py-1 rounded-full text-xs bg-accent/20 text-accent">${template.dialect}</span>
+            </div>
+          </div>
+          
+          <div class="bg-surface-light rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="font-semibold text-white">Template Code</h4>
+              <button onclick="copyTemplateCode(\`${template.template.replace(/`/g, '\\`')}\`)" 
+                      class="px-3 py-1.5 bg-primary hover:bg-primary-dark rounded-lg text-sm transition-colors">
+                Copy Template
+              </button>
+            </div>
+            <pre class="bg-surface rounded-lg p-4 overflow-x-auto text-sm font-mono text-accent">${escapeHtml(template.template)}</pre>
+          </div>
+          
+          <div class="bg-surface-light rounded-lg p-4">
+            <h4 class="font-semibold text-white mb-3">Required Variables</h4>
+            <div class="grid grid-cols-2 gap-2">
+              ${template.variables.map(v => `
+                <div class="px-3 py-2 bg-surface rounded-lg font-mono text-sm text-accent">{{${v}}}</div>
+              `).join('')}
+            </div>
+          </div>
+          
+          <div class="flex gap-2">
+            <button onclick="useTemplate(${JSON.stringify(template).replace(/"/g, '&quot;')})" 
+                    class="px-4 py-2 bg-accent hover:bg-accent/80 text-black rounded-lg font-semibold transition-colors">
+              Use This Template
+            </button>
+            <button onclick="generateFromTemplate(${JSON.stringify(template).replace(/"/g, '&quot;')})" 
+                    class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors">
+              Auto-Fill from ERD
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function copyTemplateCode(code) {
+      navigator.clipboard.writeText(code);
+      showToast('Template copied to clipboard', 'success');
+    }
+    
+    function useTemplate(template) {
+      // Close modal and insert template into Query mode
+      document.getElementById('template-library-modal').remove();
+      navigateToMode('query');
+      
+      setTimeout(() => {
+        const queryInput = document.getElementById('chat-input');
+        if (queryInput) {
+          queryInput.value = `Generate SQL using this template:\n\n${template.template}\n\nVariables needed: ${template.variables.join(', ')}`;
+          queryInput.focus();
+        }
+      }, 100);
+      
+      showToast('Template ready in Query mode', 'success');
+    }
+    
+    function generateFromTemplate(template) {
+      // Try to auto-fill variables from ERD
+      const filledTemplate = autoFillTemplateVariables(template);
+      
+      if (filledTemplate.missingVariables.length === 0) {
+        showSQLPreview(filledTemplate.sql, `Generated: ${template.name}`);
+        navigator.clipboard.writeText(filledTemplate.sql);
+        showToast('SQL generated and copied to clipboard', 'success');
+      } else {
+        // Show variable mapping UI
+        showVariableMappingUI(template, filledTemplate);
+      }
+    }
+    
+    function autoFillTemplateVariables(template) {
+      let sql = template.template;
+      const missingVariables = [];
+      const mappings = {};
+      
+      // Try to map variables to ERD tables/columns
+      template.variables.forEach(varName => {
+        const varLower = varName.toLowerCase();
+        
+        // Try to find matching table
+        if (varLower.includes('table') || varLower.includes('schema')) {
+          const matchingTable = ERDState.tables.find(t => {
+            const nameLower = t.name.toLowerCase();
+            return varLower.includes(nameLower) || 
+                   varLower.includes(t.tableType) ||
+                   (varLower.includes('source') && t.tableType === 'bronze') ||
+                   (varLower.includes('target') && t.tableType !== 'bronze');
+          });
+          
+          if (matchingTable) {
+            const replacement = matchingTable.schema ? 
+              `${matchingTable.schema}.${matchingTable.name}` : 
+              matchingTable.name;
+            mappings[varName] = replacement;
+            sql = sql.replace(new RegExp(`\\{\\{${varName}\\}\\}`, 'g'), replacement);
+          } else {
+            missingVariables.push(varName);
+          }
+        }
+        // Try to find matching column
+        else if (varLower.includes('column') || varLower.includes('key')) {
+          // Look for common patterns
+          let found = false;
+          for (const table of ERDState.tables) {
+            const matchingCol = table.columns.find(c => {
+              const colLower = c.name.toLowerCase();
+              return (varLower.includes('pk') || varLower.includes('primary')) && c.primaryKey ||
+                     (varLower.includes('fk') || varLower.includes('foreign')) && c.foreignKey ||
+                     varLower.includes(colLower);
+            });
+            
+            if (matchingCol) {
+              mappings[varName] = matchingCol.name;
+              sql = sql.replace(new RegExp(`\\{\\{${varName}\\}\\}`, 'g'), matchingCol.name);
+              found = true;
+              break;
+            }
+          }
+          if (!found) missingVariables.push(varName);
+        }
+        else {
+          missingVariables.push(varName);
+        }
+      });
+      
+      return { sql, missingVariables, mappings };
+    }
+    
+    function showVariableMappingUI(template, filledTemplate) {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-surface rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-surface-lighter">
+            <h2 class="text-xl font-bold">Map Template Variables</h2>
+            <button onclick="this.closest('.fixed').remove()" 
+                    class="text-gray-400 hover:text-white transition-colors">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+            <p class="text-sm text-gray-400">Fill in the missing variables for: <span class="text-white font-semibold">${template.name}</span></p>
+            ${filledTemplate.missingVariables.map(varName => `
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">{{${varName}}}</label>
+                <input type="text" id="var-${varName}" placeholder="Enter value for ${varName}"
+                       class="w-full bg-surface-light border border-surface-lighter rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary">
+              </div>
+            `).join('')}
+          </div>
+          <div class="p-4 border-t border-surface-lighter flex gap-2">
+            <button onclick="completeTemplateMapping('${template.name}', ${JSON.stringify(filledTemplate.missingVariables).replace(/"/g, '&quot;')}, \`${filledTemplate.sql.replace(/`/g, '\\`')}\`)"
+                    class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors">
+              Generate SQL
+            </button>
+            <button onclick="this.closest('.fixed').remove()"
+                    class="px-4 py-2 bg-surface-lighter hover:bg-surface-light rounded-lg transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+    
+    function completeTemplateMapping(templateName, missingVars, baseSql) {
+      let sql = baseSql;
+      
+      missingVars.forEach(varName => {
+        const input = document.getElementById(`var-${varName}`);
+        if (input && input.value.trim()) {
+          sql = sql.replace(new RegExp(`\\{\\{${varName}\\}\\}`, 'g'), input.value.trim());
+        }
+      });
+      
+      // Close mapping modal
+      document.querySelector('.fixed').remove();
+      
+      showSQLPreview(sql, `Generated: ${templateName}`);
+      navigator.clipboard.writeText(sql);
+      showToast('SQL generated and copied to clipboard', 'success');
     }
 
     // Cancel relationship mode on Escape
