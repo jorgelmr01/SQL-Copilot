@@ -44,6 +44,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
   <!-- SheetJS for Excel support -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  <!-- js-yaml for YAML generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
   <!-- D3.js for ERD visualization -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <!-- SQL Copilot v2 Compiler Modules -->
@@ -2996,6 +2998,16 @@
                   <span class="material-symbols-outlined text-2xl mb-1">image</span>
                   <p class="text-sm">PNG</p>
                   <p class="text-xs text-gray-500">Diagram image</p>
+                </button>
+                <button onclick="exportERDSchema('dbt')" class="p-4 bg-surface-light hover:bg-accent/20 rounded-lg text-center transition-colors">
+                  <span class="material-symbols-outlined text-2xl mb-1">hub</span>
+                  <p class="text-sm">dbt Models</p>
+                  <p class="text-xs text-gray-500">YAML schemas</p>
+                </button>
+                <button onclick="exportERDSchema('markdown')" class="p-4 bg-surface-light hover:bg-accent/20 rounded-lg text-center transition-colors">
+                  <span class="material-symbols-outlined text-2xl mb-1">description</span>
+                  <p class="text-sm">Markdown</p>
+                  <p class="text-xs text-gray-500">Documentation</p>
                 </button>
               </div>
             </div>
@@ -9050,17 +9062,324 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
     }
     
     function showColumnDetails(table, column) {
-      const details = `
-Column: ${column.name}
-Table: ${table.name}
-Type: ${column.type || 'Unknown'}
-Primary Key: ${column.primaryKey ? 'Yes' : 'No'}
-Foreign Key: ${column.foreignKey ? 'Yes' : 'No'}
-${column.expressionSQL ? `Expression: ${column.expressionSQL}` : ''}
-${column.sourceColumns ? `Sources: ${column.sourceColumns.join(', ')}` : ''}
-      `.trim();
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
       
-      alert(details); // TODO: Replace with better modal
+      // Detect semantic type and generate intelligence
+      const intelligence = analyzeColumnIntelligence(column, table);
+      
+      modal.innerHTML = `
+        <div class="bg-surface rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          <div class="flex items-center justify-between p-4 border-b border-surface-lighter">
+            <div class="flex-1">
+              <h2 class="text-xl font-bold flex items-center gap-2">
+                <span class="material-symbols-outlined text-accent">info</span>
+                Column Intelligence
+              </h2>
+              <p class="text-sm text-gray-400 mt-1">${table.name}.${column.name}</p>
+            </div>
+            <button onclick="this.closest('.fixed').remove()" 
+                    class="text-gray-400 hover:text-white transition-colors">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          
+          <div class="flex-1 overflow-y-auto p-6 space-y-4">
+            <!-- Basic Info -->
+            <div class="grid grid-cols-2 gap-4">
+              <div class="p-4 bg-surface-light rounded-lg">
+                <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Data Type</div>
+                <div class="font-mono text-lg text-accent">${column.type || 'Unknown'}</div>
+              </div>
+              <div class="p-4 bg-surface-light rounded-lg">
+                <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Semantic Type</div>
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">${intelligence.semanticIcon}</span>
+                  <span class="font-semibold text-${intelligence.semanticColor}">${intelligence.semanticType}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Characteristics -->
+            <div class="grid grid-cols-3 gap-3">
+              <div class="p-3 bg-surface-light rounded-lg text-center">
+                <div class="text-xs text-gray-400 mb-1">Primary Key</div>
+                <div class="text-lg">${column.primaryKey ? '🔑 Yes' : '—'}</div>
+              </div>
+              <div class="p-3 bg-surface-light rounded-lg text-center">
+                <div class="text-xs text-gray-400 mb-1">Foreign Key</div>
+                <div class="text-lg">${column.foreignKey ? '🔗 Yes' : '—'}</div>
+              </div>
+              <div class="p-3 bg-surface-light rounded-lg text-center">
+                <div class="text-xs text-gray-400 mb-1">Nullable</div>
+                <div class="text-lg">${column.nullable === false ? '❌ No' : column.nullable === true ? '✓ Yes' : '?'}</div>
+              </div>
+            </div>
+            
+            <!-- Intelligence Insights -->
+            ${intelligence.insights.length > 0 ? `
+              <div class="bg-primary/10 border border-primary/30 rounded-lg p-4">
+                <h3 class="font-semibold text-white mb-2 flex items-center gap-2">
+                  <span class="material-symbols-outlined text-sm text-primary">psychology</span>
+                  AI Insights
+                </h3>
+                <ul class="space-y-2">
+                  ${intelligence.insights.map(insight => `
+                    <li class="text-sm text-gray-300 flex items-start gap-2">
+                      <span class="text-primary mt-0.5">•</span>
+                      <span>${insight}</span>
+                    </li>
+                  `).join('')}
+                </ul>
+              </div>
+            ` : ''}
+            
+            <!-- Quality Rules -->
+            ${intelligence.qualityRules.length > 0 ? `
+              <div class="bg-accent/10 border border-accent/30 rounded-lg p-4">
+                <h3 class="font-semibold text-white mb-2 flex items-center gap-2">
+                  <span class="material-symbols-outlined text-sm text-accent">verified</span>
+                  Suggested Quality Rules
+                </h3>
+                <div class="space-y-2">
+                  ${intelligence.qualityRules.map(rule => `
+                    <div class="text-sm">
+                      <div class="font-mono text-accent">${rule.name}</div>
+                      <div class="text-gray-400 text-xs">${rule.description}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            <!-- Expression & Lineage -->
+            ${column.expressionSQL ? `
+              <div class="bg-surface-light rounded-lg p-4">
+                <h3 class="font-semibold text-white mb-2">Transformation Expression</h3>
+                <pre class="bg-surface rounded p-3 text-sm font-mono text-accent overflow-x-auto">${column.expressionSQL}</pre>
+              </div>
+            ` : ''}
+            
+            ${column.sourceColumns && column.sourceColumns.length > 0 ? `
+              <div class="bg-surface-light rounded-lg p-4">
+                <h3 class="font-semibold text-white mb-2">Source Lineage</h3>
+                <div class="space-y-1">
+                  ${column.sourceColumns.map(src => `
+                    <div class="font-mono text-sm text-gray-300">← ${src}</div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            <!-- Sample Usage -->
+            <div class="bg-surface-light rounded-lg p-4">
+              <h3 class="font-semibold text-white mb-2">Sample Usage Patterns</h3>
+              <div class="space-y-2">
+                ${intelligence.usagePatterns.map(pattern => `
+                  <div>
+                    <div class="text-xs text-gray-400">${pattern.title}</div>
+                    <pre class="bg-surface rounded p-2 text-xs font-mono text-accent mt-1">${pattern.code}</pre>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+          
+          <div class="p-4 border-t border-surface-lighter flex gap-2">
+            <button onclick="copyColumnName('${column.name}')"
+                    class="px-4 py-2 bg-surface-lighter hover:bg-surface-light rounded-lg transition-colors">
+              Copy Name
+            </button>
+            <button onclick="showColumnLineage(${JSON.stringify(table).replace(/"/g, '&quot;')}, ${JSON.stringify(column).replace(/"/g, '&quot;')}); this.closest('.fixed').remove();"
+                    class="px-4 py-2 bg-primary hover:bg-primary-dark rounded-lg transition-colors">
+              View Lineage
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+    
+    function analyzeColumnIntelligence(column, table) {
+      const colName = column.name.toLowerCase();
+      const colType = (column.type || '').toLowerCase();
+      const insights = [];
+      const qualityRules = [];
+      const usagePatterns = [];
+      
+      // Semantic type detection
+      let semanticType = 'Unknown';
+      let semanticIcon = '❓';
+      let semanticColor = 'gray-400';
+      
+      // PII Detection
+      if (colName.includes('email')) {
+        semanticType = 'PII - Email';
+        semanticIcon = '📧';
+        semanticColor = 'red-400';
+        insights.push('Contains personally identifiable information (PII) - ensure proper data governance');
+        insights.push('Consider masking in non-production environments');
+        qualityRules.push({ name: 'email_format', description: 'Validate email format with regex' });
+        usagePatterns.push({ 
+          title: 'Email validation', 
+          code: `WHERE ${column.name} LIKE '%@%.%' AND ${column.name} IS NOT NULL` 
+        });
+      } else if (colName.includes('phone') || colName.includes('mobile')) {
+        semanticType = 'PII - Phone';
+        semanticIcon = '📱';
+        semanticColor = 'red-400';
+        insights.push('Contains PII - phone number data');
+        qualityRules.push({ name: 'phone_format', description: 'Validate phone number format' });
+        usagePatterns.push({ 
+          title: 'Phone normalization', 
+          code: `REGEXP_REPLACE(${column.name}, '[^0-9]', '')` 
+        });
+      } else if (colName.includes('name') || colName.includes('customer') || colName.includes('user')) {
+        semanticType = 'PII - Identity';
+        semanticIcon = '👤';
+        semanticColor = 'red-400';
+        insights.push('May contain PII - handle with data privacy controls');
+      }
+      
+      // Timestamp Detection
+      else if (colName.includes('date') || colName.includes('time') || colName.includes('timestamp') || 
+               colType.includes('date') || colType.includes('timestamp')) {
+        semanticType = 'Timestamp';
+        semanticIcon = '📅';
+        semanticColor = 'blue-400';
+        insights.push('Temporal column - useful for time-series analysis and partitioning');
+        if (colName.includes('created') || colName.includes('inserted')) {
+          insights.push('Audit column - tracks record creation time');
+        }
+        usagePatterns.push({ 
+          title: 'Date filtering', 
+          code: `WHERE ${column.name} >= CURRENT_DATE - INTERVAL '30' DAY` 
+        });
+        usagePatterns.push({ 
+          title: 'Date truncation', 
+          code: `DATE_TRUNC('month', ${column.name})` 
+        });
+      }
+      
+      // Numeric Metrics
+      else if (colName.includes('amount') || colName.includes('price') || colName.includes('cost') || 
+               colName.includes('revenue') || colName.includes('total')) {
+        semanticType = 'Metric - Currency';
+        semanticIcon = '💰';
+        semanticColor = 'green-400';
+        insights.push('Financial metric - aggregate with SUM for totals');
+        insights.push('Consider currency conversion if multi-currency data');
+        qualityRules.push({ name: 'not_negative', description: 'Ensure value >= 0 for most cases' });
+        usagePatterns.push({ 
+          title: 'Aggregation', 
+          code: `SUM(${column.name}) as total_${colName}` 
+        });
+      } else if (colName.includes('count') || colName.includes('quantity') || colName.includes('qty')) {
+        semanticType = 'Metric - Count';
+        semanticIcon = '🔢';
+        semanticColor = 'green-400';
+        insights.push('Count metric - use SUM for totals, avoid AVG');
+        usagePatterns.push({ 
+          title: 'Aggregation', 
+          code: `SUM(${column.name}) as total_count` 
+        });
+      } else if (colType.includes('int') || colType.includes('decimal') || colType.includes('numeric') || colType.includes('float')) {
+        semanticType = 'Numeric';
+        semanticIcon = '🔢';
+        semanticColor = 'green-400';
+        usagePatterns.push({ 
+          title: 'Statistical analysis', 
+          code: `AVG(${column.name}), MIN(${column.name}), MAX(${column.name})` 
+        });
+      }
+      
+      // ID Fields
+      else if (colName.endsWith('_id') || colName === 'id' || colName.includes('key')) {
+        if (column.primaryKey) {
+          semanticType = 'Primary Key';
+          semanticIcon = '🔑';
+          semanticColor = 'yellow-400';
+          insights.push('Primary key - uniquely identifies each record');
+          qualityRules.push({ name: 'unique', description: 'Must be unique' });
+          qualityRules.push({ name: 'not_null', description: 'Cannot be null' });
+        } else if (column.foreignKey) {
+          semanticType = 'Foreign Key';
+          semanticIcon = '🔗';
+          semanticColor = 'purple-400';
+          insights.push('Foreign key - references another table');
+          insights.push('Use for JOIN operations');
+        } else {
+          semanticType = 'Identifier';
+          semanticIcon = '🏷️';
+          semanticColor = 'purple-400';
+          insights.push('Identifier column - likely used for relationships');
+        }
+        usagePatterns.push({ 
+          title: 'JOIN usage', 
+          code: `JOIN other_table ON table.${column.name} = other_table.${column.name}` 
+        });
+      }
+      
+      // Boolean/Status
+      else if (colName.startsWith('is_') || colName.startsWith('has_') || colType.includes('boolean')) {
+        semanticType = 'Boolean Flag';
+        semanticIcon = '✓';
+        semanticColor = 'cyan-400';
+        insights.push('Boolean flag - use for filtering and segmentation');
+        usagePatterns.push({ 
+          title: 'Filtering', 
+          code: `WHERE ${column.name} = true` 
+        });
+      }
+      
+      // Text/Description
+      else if (colType.includes('varchar') || colType.includes('text') || colType.includes('string')) {
+        semanticType = 'Text';
+        semanticIcon = '📝';
+        semanticColor = 'gray-400';
+        if (colName.includes('description') || colName.includes('comment') || colName.includes('note')) {
+          insights.push('Free-text field - may need text search or NLP');
+        }
+        usagePatterns.push({ 
+          title: 'Text search', 
+          code: `WHERE LOWER(${column.name}) LIKE '%search%'` 
+        });
+      }
+      
+      // Add general quality rules
+      if (!column.nullable) {
+        qualityRules.push({ name: 'not_null', description: 'Value must be present' });
+      }
+      
+      // Layer-specific insights
+      if (table.tableType === 'bronze' || table.tableType === 'raw') {
+        insights.push(`Bronze/Raw layer - raw data from source, minimal transformations`);
+      } else if (table.tableType === 'silver' || table.tableType === 'staging') {
+        insights.push(`Silver/Staging layer - cleaned and standardized data`);
+      } else if (table.tableType === 'gold' || table.tableType === 'dimension' || table.tableType === 'fact') {
+        insights.push(`Gold layer - business-ready data for analytics`);
+      }
+      
+      return {
+        semanticType,
+        semanticIcon,
+        semanticColor,
+        insights,
+        qualityRules,
+        usagePatterns: usagePatterns.length > 0 ? usagePatterns : [
+          { title: 'Select column', code: `SELECT ${column.name} FROM ${table.name}` }
+        ]
+      };
+    }
+    
+    function copyColumnName(name) {
+      navigator.clipboard.writeText(name);
+      showToast(`Copied: ${name}`, 'success');
     }
     
     // ==================== SQL GENERATION ====================
@@ -10836,9 +11155,242 @@ LIMIT 100;`;
         XLSX.writeFile(wb, 'schema.xlsx');
       } else if (format === 'png') {
         exportERDAsImage();
+      } else if (format === 'dbt') {
+        exportAsDbtModels();
+      } else if (format === 'markdown') {
+        exportAsMarkdownDocs();
       }
 
       hideERDExportModal();
+    }
+    
+    function exportAsDbtModels() {
+      // Generate dbt model YAML files for schema documentation
+      const dbtSchemas = {};
+      
+      // Group tables by layer/schema
+      const layers = {};
+      ERDState.tables.forEach(table => {
+        const layer = table.tableType || 'other';
+        if (!layers[layer]) layers[layer] = [];
+        layers[layer].push(table);
+      });
+      
+      // Generate schema.yml for each layer
+      Object.entries(layers).forEach(([layer, tables]) => {
+        const schemaYml = {
+          version: 2,
+          models: tables.map(table => ({
+            name: table.name,
+            description: table.description || `${table.name} table from ${layer} layer`,
+            columns: table.columns.map(col => {
+              const colDef = {
+                name: col.name,
+                description: col.description || `${col.name} column`,
+                data_type: col.type
+              };
+              
+              // Add tests based on column properties
+              const tests = [];
+              if (col.primaryKey) {
+                tests.push('unique', 'not_null');
+              } else if (!col.nullable) {
+                tests.push('not_null');
+              }
+              
+              // Add semantic-based tests
+              const colLower = col.name.toLowerCase();
+              if (colLower.includes('email')) {
+                tests.push({ 
+                  dbt_utils: { 
+                    expression_is_true: { 
+                      expression: `${col.name} LIKE '%@%.%'` 
+                    }
+                  }
+                });
+              }
+              
+              if (tests.length > 0) colDef.tests = tests;
+              
+              // Add metadata
+              const meta = {};
+              if (col.primaryKey) meta.primary_key = true;
+              if (col.foreignKey) meta.foreign_key = true;
+              if (col.semanticRole) meta.semantic_role = col.semanticRole;
+              if (col.sourceColumns && col.sourceColumns.length > 0) {
+                meta.lineage = col.sourceColumns;
+              }
+              if (Object.keys(meta).length > 0) colDef.meta = meta;
+              
+              return colDef;
+            })
+          }))
+        };
+        
+        dbtSchemas[`${layer}_schema.yml`] = 
+          '# dbt schema for ' + layer + ' layer\n' +
+          '# Generated by SQL Copilot\n\n' +
+          jsyaml.dump(schemaYml, { indent: 2, lineWidth: 120 });
+      });
+      
+      // Create a zip file or download individually
+      if (Object.keys(dbtSchemas).length === 1) {
+        const [filename, content] = Object.entries(dbtSchemas)[0];
+        downloadFile(filename, content, 'text/yaml');
+      } else {
+        // Download as separate files (browser will prompt for each)
+        Object.entries(dbtSchemas).forEach(([filename, content]) => {
+          downloadFile(filename, content, 'text/yaml');
+        });
+      }
+      
+      showToast(`Generated ${Object.keys(dbtSchemas).length} dbt schema file(s)`, 'success');
+    }
+    
+    function exportAsMarkdownDocs() {
+      let markdown = `# Data Schema Documentation\n\n`;
+      markdown += `> Generated by SQL Copilot on ${new Date().toLocaleDateString()}\n\n`;
+      markdown += `## Overview\n\n`;
+      markdown += `Total Tables: ${ERDState.tables.length}\n`;
+      markdown += `Total Relationships: ${ERDState.relationships.length}\n\n`;
+      
+      // Group by layer
+      const layers = {};
+      ERDState.tables.forEach(table => {
+        const layer = table.tableType || 'other';
+        if (!layers[layer]) layers[layer] = [];
+        layers[layer].push(table);
+      });
+      
+      // Layer icons
+      const layerIcons = {
+        bronze: '🥉',
+        silver: '🥈',
+        gold: '🥇',
+        raw: '📥',
+        staging: '🔄',
+        dimension: '📊',
+        fact: '📈'
+      };
+      
+      // Table of contents
+      markdown += `## Table of Contents\n\n`;
+      Object.entries(layers).forEach(([layer, tables]) => {
+        const icon = layerIcons[layer] || '📋';
+        markdown += `- [${icon} ${layer.toUpperCase()} Layer](#${layer}-layer) (${tables.length} tables)\n`;
+      });
+      markdown += `\n---\n\n`;
+      
+      // Document each layer
+      Object.entries(layers).forEach(([layer, tables]) => {
+        const icon = layerIcons[layer] || '📋';
+        markdown += `## ${icon} ${layer.toUpperCase()} Layer\n\n`;
+        
+        tables.forEach(table => {
+          markdown += `### ${table.name}\n\n`;
+          
+          if (table.description) {
+            markdown += `${table.description}\n\n`;
+          }
+          
+          // Metadata badges
+          const badges = [];
+          if (table.schema) badges.push(`**Schema:** \`${table.schema}\``);
+          if (table.tableType) badges.push(`**Type:** ${table.tableType}`);
+          if (table.columns.length > 0) badges.push(`**Columns:** ${table.columns.length}`);
+          
+          if (badges.length > 0) {
+            markdown += badges.join(' | ') + '\n\n';
+          }
+          
+          // Columns table
+          if (table.columns.length > 0) {
+            markdown += `#### Columns\n\n`;
+            markdown += `| Column | Type | Description | Constraints |\n`;
+            markdown += `|--------|------|-------------|-------------|\n`;
+            
+            table.columns.forEach(col => {
+              const constraints = [];
+              if (col.primaryKey) constraints.push('🔑 PK');
+              if (col.foreignKey) constraints.push('🔗 FK');
+              if (col.nullable === false) constraints.push('NOT NULL');
+              
+              const desc = col.description || 
+                          (col.sourceColumns && col.sourceColumns.length > 0 ? 
+                            `From: ${col.sourceColumns.slice(0, 2).join(', ')}` : '');
+              
+              markdown += `| \`${col.name}\` | ${col.type || 'VARCHAR'} | ${desc} | ${constraints.join(', ')} |\n`;
+            });
+            markdown += `\n`;
+          }
+          
+          // Relationships
+          const outgoing = ERDState.relationships.filter(r => 
+            r.from.table === table.id || r.from.table === table.name
+          );
+          const incoming = ERDState.relationships.filter(r => 
+            r.to.table === table.id || r.to.table === table.name
+          );
+          
+          if (outgoing.length > 0 || incoming.length > 0) {
+            markdown += `#### Relationships\n\n`;
+            
+            if (outgoing.length > 0) {
+              markdown += `**References:**\n`;
+              outgoing.forEach(rel => {
+                const targetTable = ERDState.tables.find(t => t.id === rel.to.table || t.name === rel.to.table);
+                if (targetTable) {
+                  markdown += `- → [\`${targetTable.name}\`](#${targetTable.name.toLowerCase().replace(/[^a-z0-9]/g, '-')})`;
+                  if (rel.join_keys && rel.join_keys.length > 0) {
+                    markdown += ` via \`${rel.join_keys.join(', ')}\``;
+                  }
+                  markdown += `\n`;
+                }
+              });
+            }
+            
+            if (incoming.length > 0) {
+              markdown += `**Referenced by:**\n`;
+              incoming.forEach(rel => {
+                const sourceTable = ERDState.tables.find(t => t.id === rel.from.table || t.name === rel.from.table);
+                if (sourceTable) {
+                  markdown += `- ← [\`${sourceTable.name}\`](#${sourceTable.name.toLowerCase().replace(/[^a-z0-9]/g, '-')})`;
+                  if (rel.join_keys && rel.join_keys.length > 0) {
+                    markdown += ` via \`${rel.join_keys.join(', ')}\``;
+                  }
+                  markdown += `\n`;
+                }
+              });
+            }
+            markdown += `\n`;
+          }
+          
+          markdown += `---\n\n`;
+        });
+      });
+      
+      // Relationship diagram section
+      if (ERDState.relationships.length > 0) {
+        markdown += `## Relationship Diagram\n\n`;
+        markdown += `\`\`\`mermaid\nerDiagram\n`;
+        
+        ERDState.relationships.forEach(rel => {
+          const fromTable = ERDState.tables.find(t => t.id === rel.from.table || t.name === rel.from.table);
+          const toTable = ERDState.tables.find(t => t.id === rel.to.table || t.name === rel.to.table);
+          
+          if (fromTable && toTable) {
+            const cardinality = rel.type === 'one-to-many' ? '||--o{' : 
+                               rel.type === 'many-to-one' ? '}o--||' :
+                               rel.type === 'one-to-one' ? '||--||' : '||--||';
+            markdown += `  ${fromTable.name} ${cardinality} ${toTable.name} : "${rel.join_keys ? rel.join_keys.join(', ') : 'joins'}"\n`;
+          }
+        });
+        
+        markdown += `\`\`\`\n\n`;
+      }
+      
+      downloadFile('schema-documentation.md', markdown, 'text/markdown');
+      showToast('Markdown documentation generated', 'success');
     }
 
     function exportERDAsImage() {
