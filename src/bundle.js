@@ -440,21 +440,44 @@
     buildAliasMap(ir) {
       const aliasMap = new Map();
       
+      // Helper to build qualified table name
+      const getQualifiedName = (src) => {
+        if (src.schema && src.table) {
+          return `${src.schema}.${src.table}`;
+        }
+        return src.table;
+      };
+      
       // From main sources
       for (const src of (ir.sources || [])) {
         if (src.type === 'table') {
+          const qualifiedName = getQualifiedName(src);
           const tableName = src.table;
           const alias = src.alias || tableName;
-          aliasMap.set(alias.toLowerCase(), tableName.toLowerCase());
+          
+          // Map alias to qualified name (e.g., "r" -> "bronze.raw_customers")
+          aliasMap.set(alias.toLowerCase(), qualifiedName.toLowerCase());
+          
+          // CRITICAL: Also map alias to unqualified name for backward compatibility
+          // This allows lookups to work with both "raw_customers" and "bronze.raw_customers"
+          if (src.schema) {
+            aliasMap.set(`${alias.toLowerCase()}_unqualified`, tableName.toLowerCase());
+          }
         }
       }
       
       // From joins
       for (const join of (ir.joins || [])) {
         if (join.right?.type === 'table') {
+          const qualifiedName = getQualifiedName(join.right);
           const tableName = join.right.table;
           const alias = join.right.alias || tableName;
-          aliasMap.set(alias.toLowerCase(), tableName.toLowerCase());
+          
+          aliasMap.set(alias.toLowerCase(), qualifiedName.toLowerCase());
+          
+          if (join.right.schema) {
+            aliasMap.set(`${alias.toLowerCase()}_unqualified`, tableName.toLowerCase());
+          }
         }
       }
       
@@ -528,9 +551,34 @@
           // Full async expansion happens in extractAsync()
           if (tableName) {
             // table.* - try to expand from upstream schemas
-            const resolvedTable = aliasMap.get(tableName.toLowerCase()) || tableName.toLowerCase();
+            // CRITICAL FIX: Try multiple resolution strategies
+            let resolvedTable = aliasMap.get(tableName.toLowerCase()) || tableName.toLowerCase();
+            let upstreamCols = null;
+            
+            // Strategy 1: Direct lookup (e.g., "raw_customers" or "bronze.raw_customers")
             if (this.upstreamSchemas.has(resolvedTable)) {
-              const upstreamCols = this.upstreamSchemas.get(resolvedTable);
+              upstreamCols = this.upstreamSchemas.get(resolvedTable);
+            }
+            
+            // Strategy 2: Try with unqualified name from aliasMap
+            if (!upstreamCols && aliasMap.has(`${tableName.toLowerCase()}_unqualified`)) {
+              const unqualifiedName = aliasMap.get(`${tableName.toLowerCase()}_unqualified`);
+              if (this.upstreamSchemas.has(unqualifiedName)) {
+                upstreamCols = this.upstreamSchemas.get(unqualifiedName);
+                resolvedTable = unqualifiedName;
+              }
+            }
+            
+            // Strategy 3: If resolved table has schema prefix, try without it
+            if (!upstreamCols && resolvedTable.includes('.')) {
+              const unqualified = resolvedTable.split('.').pop();
+              if (this.upstreamSchemas.has(unqualified)) {
+                upstreamCols = this.upstreamSchemas.get(unqualified);
+                resolvedTable = unqualified;
+              }
+            }
+            
+            if (upstreamCols) {
               for (const col of upstreamCols) {
                 columns.push({
                   id: `col_${this.hash(col.name.toLowerCase())}_${colIndex++}`,

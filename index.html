@@ -13210,7 +13210,16 @@ If action is unknown, set message to explain what went wrong.`,
           filesProcessed++;
           
           // Add upstream schema for SELECT * expansion in downstream models
+          // Register with table name alone
           extractor.addUpstreamSchema(schema.name, schema.columns);
+          
+          // CRITICAL FIX: Also register with schema-qualified name (e.g., "bronze.raw_customers")
+          // This allows downstream queries like "SELECT * FROM bronze.raw_customers" to resolve correctly
+          if (schema.schema) {
+            const qualifiedName = `${schema.schema}.${schema.name}`;
+            extractor.addUpstreamSchema(qualifiedName, schema.columns);
+            console.log(`Registered upstream schema: ${schema.name} AND ${qualifiedName}`);
+          }
           
           // Cache the parsed schema
           try {
