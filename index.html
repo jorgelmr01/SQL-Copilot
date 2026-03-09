@@ -8589,12 +8589,20 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
           const colG = g.append('g')
             .attr('class', 'erd-column-row')
             .attr('transform', `translate(0, ${y})`)
-            .style('cursor', ERDState.relationshipMode ? 'crosshair' : 'default')
+            .style('cursor', ERDState.relationshipMode ? 'crosshair' : 'pointer')
             .on('click', (e) => {
               e.stopPropagation();
               if (ERDState.relationshipMode) {
                 handleColumnClickForRelationship(table.id, col.name);
+              } else {
+                // Show column lineage
+                showColumnLineage(table, col);
               }
+            })
+            .on('contextmenu', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              showColumnContextMenu(e, table, col);
             });
 
           colG.append('rect')
@@ -8656,7 +8664,11 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         });
 
         // Click handler for selection
-        g.on('click', () => selectTable(table.id));
+        g.on('click', () => selectTable(table.id))
+          .on('contextmenu', (e) => {
+            e.preventDefault();
+            showTableContextMenu(e, table);
+          });
       });
     }
 
@@ -8815,6 +8827,459 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         renderERD();
         showToast('Relationship created', 'success');
       }
+    }
+
+    // ==================== COLUMN LINEAGE EXPLORER ====================
+    function showColumnLineage(table, column) {
+      const modal = document.getElementById('lineage-modal');
+      if (!modal) {
+        createLineageModal();
+      }
+      
+      const lineageData = traceColumnLineage(table, column);
+      renderLineageGraph(lineageData);
+      document.getElementById('lineage-modal').classList.remove('hidden');
+    }
+    
+    function traceColumnLineage(table, column) {
+      const lineage = {
+        target: { table: table.name, column: column.name, layer: table.tableType },
+        chain: []
+      };
+      
+      // Build lineage chain by tracing sourceColumns
+      let currentCol = column;
+      let currentTable = table;
+      let depth = 0;
+      const maxDepth = 10; // Prevent infinite loops
+      
+      while (currentCol.sourceColumns && currentCol.sourceColumns.length > 0 && depth < maxDepth) {
+        const sources = [];
+        
+        for (const src of currentCol.sourceColumns) {
+          // Parse source (format: "table.column" or "schema.table.column")
+          const parts = src.split('.');
+          const srcColName = parts.pop();
+          const srcTableName = parts.pop() || parts[0];
+          
+          // Find source table in ERD
+          const srcTable = ERDState.tables.find(t => 
+            t.name.toLowerCase() === srcTableName.toLowerCase()
+          );
+          
+          if (srcTable) {
+            const srcColumn = srcTable.columns.find(c => 
+              c.name.toLowerCase() === srcColName.toLowerCase()
+            );
+            
+            sources.push({
+              table: srcTable.name,
+              column: srcColName,
+              layer: srcTable.tableType,
+              transformation: currentCol.expressionSQL || currentCol.name,
+              fullColumn: srcColumn
+            });
+            
+            // Continue tracing from first source
+            if (sources.length === 1 && srcColumn) {
+              currentCol = srcColumn;
+              currentTable = srcTable;
+            }
+          }
+        }
+        
+        if (sources.length > 0) {
+          lineage.chain.push(sources);
+          depth++;
+        } else {
+          break;
+        }
+      }
+      
+      return lineage;
+    }
+    
+    function renderLineageGraph(lineageData) {
+      const content = document.getElementById('lineage-content');
+      content.innerHTML = '';
+      
+      // Header
+      const header = document.createElement('div');
+      header.className = 'mb-4 pb-3 border-b border-surface-lighter';
+      header.innerHTML = `
+        <h3 class="text-lg font-semibold text-primary">Column Lineage</h3>
+        <p class="text-sm text-gray-400 mt-1">
+          ${lineageData.target.table}.${lineageData.target.column}
+          <span class="ml-2 px-2 py-0.5 rounded text-xs ${getLayerColor(lineageData.target.layer)}">${lineageData.target.layer}</span>
+        </p>
+      `;
+      content.appendChild(header);
+      
+      // Lineage chain
+      if (lineageData.chain.length === 0) {
+        content.innerHTML += '<p class="text-gray-400 text-sm">No upstream lineage found. This may be a source column.</p>';
+        return;
+      }
+      
+      const chainContainer = document.createElement('div');
+      chainContainer.className = 'space-y-3';
+      
+      lineageData.chain.forEach((sources, idx) => {
+        sources.forEach(src => {
+          const node = document.createElement('div');
+          node.className = 'flex items-start gap-3 p-3 rounded-lg bg-surface-light border border-surface-lighter hover:border-primary transition-colors cursor-pointer';
+          node.onclick = () => {
+            const table = ERDState.tables.find(t => t.name === src.table);
+            if (table) selectTable(table.id);
+            document.getElementById('lineage-modal').classList.add('hidden');
+          };
+          
+          node.innerHTML = `
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">
+              ${lineageData.chain.length - idx}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-mono text-sm text-white">${src.table}</span>
+                <span class="px-2 py-0.5 rounded text-xs ${getLayerColor(src.layer)}">${src.layer}</span>
+              </div>
+              <div class="font-mono text-xs text-accent">${src.column}</div>
+              ${src.transformation !== src.column ? 
+                `<div class="mt-1 text-xs text-gray-400">→ ${src.transformation}</div>` : ''}
+            </div>
+            <span class="material-symbols-outlined text-gray-500 text-sm">arrow_upward</span>
+          `;
+          
+          chainContainer.appendChild(node);
+        });
+      });
+      
+      content.appendChild(chainContainer);
+    }
+    
+    function getLayerColor(layer) {
+      const colors = {
+        raw: 'bg-amber-900/50 text-amber-300',
+        bronze: 'bg-amber-900/50 text-amber-300',
+        staging: 'bg-blue-900/50 text-blue-300',
+        silver: 'bg-blue-900/50 text-blue-300',
+        dimension: 'bg-purple-900/50 text-purple-300',
+        fact: 'bg-green-900/50 text-green-300',
+        gold: 'bg-yellow-900/50 text-yellow-300',
+        aggregate: 'bg-red-900/50 text-red-300'
+      };
+      return colors[layer] || 'bg-gray-900/50 text-gray-300';
+    }
+    
+    function createLineageModal() {
+      const modal = document.createElement('div');
+      modal.id = 'lineage-modal';
+      modal.className = 'hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-surface rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <div class="flex items-center justify-between p-4 border-b border-surface-lighter">
+            <h2 class="text-xl font-bold">Column Lineage</h2>
+            <button onclick="document.getElementById('lineage-modal').classList.add('hidden')" 
+                    class="text-gray-400 hover:text-white transition-colors">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div id="lineage-content" class="flex-1 overflow-y-auto p-4"></div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      // Close on click outside
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.classList.add('hidden');
+        }
+      });
+    }
+    
+    // ==================== COLUMN CONTEXT MENU ====================
+    function showColumnContextMenu(event, table, column) {
+      // Remove existing menu
+      const existingMenu = document.getElementById('column-context-menu');
+      if (existingMenu) existingMenu.remove();
+      
+      const menu = document.createElement('div');
+      menu.id = 'column-context-menu';
+      menu.className = 'fixed bg-surface-light rounded-lg shadow-2xl border border-surface-lighter py-1 z-50';
+      menu.style.left = `${event.clientX}px`;
+      menu.style.top = `${event.clientY}px`;
+      
+      const menuItems = [
+        { icon: 'account_tree', label: 'Show Lineage', action: () => showColumnLineage(table, column) },
+        { icon: 'content_copy', label: 'Copy Column Name', action: () => {
+          navigator.clipboard.writeText(column.name);
+          showToast(`Copied: ${column.name}`, 'success');
+        }},
+        { icon: 'code', label: 'Generate SELECT', action: () => generateSelectSQL([table], [column]) },
+        { icon: 'info', label: 'Column Details', action: () => showColumnDetails(table, column) }
+      ];
+      
+      menuItems.forEach(item => {
+        const menuItem = document.createElement('button');
+        menuItem.className = 'w-full px-4 py-2 text-left hover:bg-surface transition-colors flex items-center gap-2 text-sm';
+        menuItem.innerHTML = `
+          <span class="material-symbols-outlined text-sm">${item.icon}</span>
+          <span>${item.label}</span>
+        `;
+        menuItem.onclick = () => {
+          item.action();
+          menu.remove();
+        };
+        menu.appendChild(menuItem);
+      });
+      
+      document.body.appendChild(menu);
+      
+      // Close menu on click outside
+      setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+          menu.remove();
+          document.removeEventListener('click', closeMenu);
+        });
+      }, 0);
+    }
+    
+    function showColumnDetails(table, column) {
+      const details = `
+Column: ${column.name}
+Table: ${table.name}
+Type: ${column.type || 'Unknown'}
+Primary Key: ${column.primaryKey ? 'Yes' : 'No'}
+Foreign Key: ${column.foreignKey ? 'Yes' : 'No'}
+${column.expressionSQL ? `Expression: ${column.expressionSQL}` : ''}
+${column.sourceColumns ? `Sources: ${column.sourceColumns.join(', ')}` : ''}
+      `.trim();
+      
+      alert(details); // TODO: Replace with better modal
+    }
+    
+    // ==================== SQL GENERATION ====================
+    function generateSelectSQL(tables, columns) {
+      if (!tables || tables.length === 0) {
+        showToast('No tables selected', 'error');
+        return;
+      }
+      
+      const table = tables[0];
+      const cols = columns && columns.length > 0 ? columns : table.columns.slice(0, 10);
+      
+      const sql = `SELECT
+    ${cols.map(c => c.name).join(',\n    ')}
+FROM ${table.schema ? `${table.schema}.` : ''}${table.name}
+LIMIT 100;`;
+      
+      navigator.clipboard.writeText(sql);
+      showToast('SQL copied to clipboard', 'success');
+      
+      // Also show in a modal
+      showSQLPreview(sql, 'Generated SELECT Statement');
+    }
+    
+    function showSQLPreview(sql, title) {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-surface rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-surface-lighter">
+            <h2 class="text-xl font-bold">${title}</h2>
+            <button onclick="this.closest('.fixed').remove()" 
+                    class="text-gray-400 hover:text-white transition-colors">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="p-4">
+            <pre class="bg-surface-light rounded-lg p-4 overflow-x-auto text-sm font-mono text-accent">${sql}</pre>
+            <div class="mt-4 flex gap-2">
+              <button onclick="navigator.clipboard.writeText(\`${sql.replace(/`/g, '\\`')}\`); showToast('Copied!', 'success')"
+                      class="px-4 py-2 bg-primary hover:bg-primary-dark rounded-lg text-sm transition-colors">
+                Copy SQL
+              </button>
+              <button onclick="this.closest('.fixed').remove()"
+                      class="px-4 py-2 bg-surface-lighter hover:bg-surface-light rounded-lg text-sm transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+
+    // ==================== TABLE CONTEXT MENU ====================
+    function showTableContextMenu(event, table) {
+      const existingMenu = document.getElementById('table-context-menu');
+      if (existingMenu) existingMenu.remove();
+      
+      const menu = document.createElement('div');
+      menu.id = 'table-context-menu';
+      menu.className = 'fixed bg-surface-light rounded-lg shadow-2xl border border-surface-lighter py-1 z-50';
+      menu.style.left = `${event.clientX}px`;
+      menu.style.top = `${event.clientY}px`;
+      
+      const menuItems = [
+        { icon: 'code', label: 'Generate SELECT', action: () => generateSelectSQL([table], null) },
+        { icon: 'call_merge', label: 'Generate JOIN with...', action: () => showJoinTargetSelector(table) },
+        { icon: 'schema', label: 'Show Related Tables', action: () => highlightRelatedTables(table) },
+        { icon: 'content_copy', label: 'Copy Table Name', action: () => {
+          const fullName = table.schema ? `${table.schema}.${table.name}` : table.name;
+          navigator.clipboard.writeText(fullName);
+          showToast(`Copied: ${fullName}`, 'success');
+        }},
+        { icon: 'info', label: 'Table Details', action: () => selectTable(table.id) }
+      ];
+      
+      menuItems.forEach(item => {
+        const menuItem = document.createElement('button');
+        menuItem.className = 'w-full px-4 py-2 text-left hover:bg-surface transition-colors flex items-center gap-2 text-sm';
+        menuItem.innerHTML = `
+          <span class="material-symbols-outlined text-sm">${item.icon}</span>
+          <span>${item.label}</span>
+        `;
+        menuItem.onclick = () => {
+          item.action();
+          menu.remove();
+        };
+        menu.appendChild(menuItem);
+      });
+      
+      document.body.appendChild(menu);
+      
+      setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+          menu.remove();
+          document.removeEventListener('click', closeMenu);
+        });
+      }, 0);
+    }
+    
+    function showJoinTargetSelector(sourceTable) {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-surface rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-surface-lighter">
+            <h2 class="text-xl font-bold">Select Target Table</h2>
+            <button onclick="this.closest('.fixed').remove()" 
+                    class="text-gray-400 hover:text-white transition-colors">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="p-4">
+            <p class="text-sm text-gray-400 mb-4">Generate JOIN SQL from <span class="text-accent font-mono">${sourceTable.name}</span> to:</p>
+            <div class="space-y-2 max-h-96 overflow-y-auto" id="join-target-list"></div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      const targetList = document.getElementById('join-target-list');
+      ERDState.tables.filter(t => t.id !== sourceTable.id).forEach(targetTable => {
+        const button = document.createElement('button');
+        button.className = 'w-full p-3 rounded-lg bg-surface-light hover:bg-surface-lighter border border-surface-lighter hover:border-primary transition-colors text-left';
+        button.innerHTML = `
+          <div class="font-mono text-sm text-white">${targetTable.name}</div>
+          <div class="text-xs text-gray-400 mt-1">${targetTable.tableType || 'unknown'} • ${targetTable.columns.length} columns</div>
+        `;
+        button.onclick = () => {
+          generateJoinSQL(sourceTable, targetTable);
+          modal.remove();
+        };
+        targetList.appendChild(button);
+      });
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+    
+    function generateJoinSQL(leftTable, rightTable) {
+      // Find existing relationship between tables
+      let joinCondition = null;
+      const rel = ERDState.relationships.find(r => 
+        (r.from.table === leftTable.id && r.to.table === rightTable.id) ||
+        (r.from.table === rightTable.id && r.to.table === leftTable.id)
+      );
+      
+      if (rel) {
+        // Use existing relationship
+        const leftCol = rel.from.table === leftTable.id ? rel.from.column : rel.to.column;
+        const rightCol = rel.from.table === rightTable.id ? rel.from.column : rel.to.column;
+        joinCondition = `${leftTable.name}.${leftCol} = ${rightTable.name}.${rightCol}`;
+      } else {
+        // Try to infer join condition based on common column names
+        const commonCols = leftTable.columns.filter(lc => 
+          rightTable.columns.some(rc => rc.name.toLowerCase() === lc.name.toLowerCase())
+        );
+        
+        if (commonCols.length > 0) {
+          joinCondition = commonCols.map(c => `${leftTable.name}.${c.name} = ${rightTable.name}.${c.name}`).join(' AND ');
+        } else {
+          // Look for FK pattern: table_id matches id in other table
+          const fkCol = leftTable.columns.find(c => c.name.toLowerCase().includes(rightTable.name.toLowerCase()));
+          const pkCol = rightTable.columns.find(c => c.name.toLowerCase() === 'id' || c.primaryKey);
+          
+          if (fkCol && pkCol) {
+            joinCondition = `${leftTable.name}.${fkCol.name} = ${rightTable.name}.${pkCol.name}`;
+          } else {
+            joinCondition = `${leftTable.name}.<join_key> = ${rightTable.name}.<join_key>`;
+          }
+        }
+      }
+      
+      // Select top 10 columns from each table
+      const leftCols = leftTable.columns.slice(0, 10).map(c => `    l.${c.name}`);
+      const rightCols = rightTable.columns.slice(0, 10).map(c => `    r.${c.name}`);
+      const allCols = [...leftCols, ...rightCols].join(',\n');
+      
+      const leftSchema = leftTable.schema ? `${leftTable.schema}.` : '';
+      const rightSchema = rightTable.schema ? `${rightTable.schema}.` : '';
+      
+      const sql = `SELECT
+${allCols}
+FROM ${leftSchema}${leftTable.name} l
+INNER JOIN ${rightSchema}${rightTable.name} r
+    ON ${joinCondition}
+LIMIT 100;`;
+      
+      showSQLPreview(sql, 'Generated JOIN SQL');
+      navigator.clipboard.writeText(sql);
+      showToast('JOIN SQL copied to clipboard', 'success');
+    }
+    
+    function highlightRelatedTables(table) {
+      // Find all tables connected via relationships
+      const relatedIds = new Set([table.id]);
+      ERDState.relationships.forEach(rel => {
+        if (rel.from.table === table.id) relatedIds.add(rel.to.table);
+        if (rel.to.table === table.id) relatedIds.add(rel.from.table);
+      });
+      
+      // Highlight related, dim others
+      ERDState.tables.forEach(t => {
+        t.highlighted = relatedIds.has(t.id);
+        t.dimmed = !relatedIds.has(t.id);
+      });
+      
+      renderERD();
+      showToast(`Highlighting ${relatedIds.size} related tables`, 'info');
+      
+      // Reset after 3 seconds
+      setTimeout(() => {
+        ERDState.tables.forEach(t => {
+          t.highlighted = false;
+          t.dimmed = false;
+        });
+        renderERD();
+      }, 3000);
     }
 
     // Cancel relationship mode on Escape
