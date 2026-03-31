@@ -1,7 +1,7 @@
 {
   "name": "sql-copilot-v2",
-  "version": "2.0.0",
-  "description": "Expert-grade ERD & SQL Library with compiler-style metadata extraction",
+  "version": "2.1.0",
+  "description": "AI-powered SQL Copilot with ERD visualization, enhanced schema extraction, variable/dependency tracking, and production-ready code generation for Athena/Presto/Spark",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -9,6 +9,17 @@
     "build": "vite build",
     "preview": "vite preview"
   },
+  "keywords": [
+    "sql",
+    "erd",
+    "schema",
+    "athena",
+    "presto",
+    "spark",
+    "code-generation",
+    "ai",
+    "data-engineering"
+  ],
   "dependencies": {
     "node-sql-parser": "^4.18.0",
     "d3": "^7.8.5"

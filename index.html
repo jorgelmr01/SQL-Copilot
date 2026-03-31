@@ -48,6 +48,20 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
   <!-- D3.js for ERD visualization -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- Performance Optimizations -->
+  <script src="src/performance.js"></script>
+  <!-- ERD Virtualization -->
+  <script src="src/erd-virtualization.js"></script>
+  <!-- Enhanced Schema Extraction -->
+  <script src="src/enhanced-schema-extractor.js"></script>
+  <!-- Enhanced Analysis UI -->
+  <script src="src/enhanced-analysis-ui.js"></script>
+  <!-- Smart Code Generator -->
+  <script src="src/smart-code-generator.js"></script>
+  <!-- Enhanced Template System -->
+  <script src="src/enhanced-templates.js"></script>
+  <!-- Quick Start SQL -->
+  <script src="src/quick-start-sql.js"></script>
   <!-- SQL Copilot v2 Compiler Modules -->
   <script src="src/bundle.js"></script>
   <!-- SQL Template Library -->
@@ -2187,7 +2201,7 @@
                 <div class="flex items-center gap-2">
                   <input type="text" id="library-search" placeholder="Search files & SQL content..." 
                     class="bg-surface-light border border-surface-lighter rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:border-primary"
-                    oninput="searchLibraryFiles(this.value)">
+                    oninput="debouncedSearch(this.value, searchLibraryFiles)">
                   <button onclick="processSelectedToERD()" id="btn-process-erd" class="px-3 py-1.5 bg-accent hover:bg-accent/80 text-black rounded-lg text-sm flex items-center gap-1 transition-colors" disabled>
                     <span class="material-symbols-outlined text-sm">account_tree</span>
                     Process to ERD
@@ -2382,7 +2396,7 @@
                 <div class="flex items-center gap-2">
                   <input type="text" id="erd-search" placeholder="Search tables..." 
                     class="bg-surface-light border border-surface-lighter rounded-lg px-3 py-1.5 text-sm w-48 focus:outline-none focus:border-primary"
-                    oninput="searchERDTables(this.value)">
+                    oninput="debouncedSearch(this.value, searchERDTables)">
                   <div class="w-px h-6 bg-surface-lighter mx-2"></div>
                   <button onclick="showERDImportModal()" class="px-3 py-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm flex items-center gap-1 transition-colors">
                     <span class="material-symbols-outlined text-sm">upload</span>
@@ -2391,6 +2405,11 @@
                   <button onclick="showERDExportModal()" class="px-3 py-1.5 bg-surface-light hover:bg-surface-lighter rounded-lg text-sm flex items-center gap-1 transition-colors">
                     <span class="material-symbols-outlined text-sm">download</span>
                     Export
+                  </button>
+                  <div class="w-px h-6 bg-surface-lighter mx-2"></div>
+                  <button onclick="showQuickStartSQL()" class="px-3 py-1.5 bg-gradient-to-r from-accent/20 to-primary/20 hover:from-accent/30 hover:to-primary/30 border border-accent/30 rounded-lg text-sm flex items-center gap-1 transition-colors" title="Generate production-ready SQL from schema">
+                    <span class="material-symbols-outlined text-sm">bolt</span>
+                    Quick Start SQL
                   </button>
                   <div class="w-px h-6 bg-surface-lighter mx-2"></div>
                   <button onclick="showClearSchemaModal()" class="px-3 py-1.5 bg-surface-light hover:bg-error/20 text-gray-300 hover:text-error rounded-lg text-sm flex items-center gap-1 transition-colors" title="Clear all tables and relationships">
@@ -2470,6 +2489,12 @@
               
               <!-- Table Editor Content -->
               <div id="side-panel-table-editor" class="flex-1 overflow-auto p-4 space-y-4">
+                <!-- Enhanced Analysis Button -->
+                <button id="enhanced-analysis-btn" class="view-hidden w-full flex items-center justify-center gap-2 p-3 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg hover:from-purple-600/30 hover:to-blue-600/30 transition-all">
+                  <span class="material-symbols-outlined text-purple-400">analytics</span>
+                  <span class="text-sm font-medium text-purple-300">Enhanced Analysis</span>
+                </button>
+                
                 <!-- Stub/Aggregated indicators -->
                 <div id="side-panel-table-badges" class="flex flex-wrap gap-2 view-hidden">
                   <span id="side-panel-stub-badge" class="view-hidden px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full">Source (Stub)</span>
@@ -3254,7 +3279,7 @@
             <div class="p-3 flex items-center gap-2 border-b border-surface-light">
               <span class="material-symbols-outlined text-gray-400">search</span>
               <input type="text" id="global-search-input" placeholder="Search tables, columns, descriptions... (Ctrl+K)" 
-                oninput="performGlobalSearch(this.value)"
+                oninput="debouncedSearch(this.value, performGlobalSearch)"
                 class="flex-1 bg-transparent text-sm focus:outline-none placeholder-gray-500">
               <kbd class="text-xs bg-surface-light px-1.5 py-0.5 rounded text-gray-500">ESC</kbd>
             </div>
@@ -5676,35 +5701,63 @@ ${isPlaceholderMode ? 'Generate the query with placeholder names - this is for t
       hideLoading();
 
       if (result) {
-        // Validate generated SQL for table/column references
-        const sqlLower = result.toLowerCase();
-        const mappings = AppState.currentQuery.mappings || {};
-        const mappedValues = Object.values(mappings).map(v => v.toLowerCase());
+        // Apply Smart Code Generator for production-ready SQL
+        const generator = new window.SmartCodeGenerator(selectedDialect);
+        generator.setSchemaContext(
+          ERDState.tables,
+          ERDState.relationships,
+          AppState.schemaColumns
+        );
         
-        // Check for potential new variables (simple heuristic)
-        const warnings = [];
-        const potentialTables = result.match(/\bFROM\s+(\w+)/gi) || [];
-        const potentialJoins = result.match(/\bJOIN\s+(\w+)/gi) || [];
-        
-        [...potentialTables, ...potentialJoins].forEach(match => {
-          const tableName = match.split(/\s+/)[1];
-          if (tableName && !mappedValues.includes(tableName.toLowerCase()) && !tableName.startsWith('(')) {
-            // Check if it's a CTE name defined in the query
-            const ctePattern = new RegExp(`\\bWITH\\s+${tableName}\\s+AS`, 'i');
-            if (!ctePattern.test(result)) {
-              warnings.push(`Table "${tableName}" may not be in approved mappings`);
-            }
+        // Post-process the generated SQL
+        const processed = generator.generateProductionSQL(result, AppState.currentQuery.mappings || {}, {
+          addComments: true,
+          addOptimizationHints: true,
+          validateSchema: true,
+          formatCode: true,
+          addMetadata: true,
+          metadata: {
+            title: AppState.currentQuery.prompt,
+            description: `Generated for ${selectedDialect.toUpperCase()}`,
+            author: 'SQL Copilot'
           }
         });
         
-        AppState.currentQuery.sql = result;
-        renderSQLEditor(result);
+        // Store both raw and processed SQL
+        AppState.currentQuery.sqlRaw = result;
+        AppState.currentQuery.sql = processed.sql;
+        AppState.currentQuery.optimizationHints = processed.hints;
+        AppState.currentQuery.validationErrors = processed.errors;
+        AppState.currentQuery.validationWarnings = processed.warnings;
         
-        let assistantMessage = 'I\'ve generated your SQL query based on the approved logic and mappings.';
-        if (warnings.length > 0) {
-          assistantMessage += `\n\n⚠️ **Warning**: ${warnings.join(', ')}. Please verify these are correct.`;
+        renderSQLEditor(processed.sql);
+        
+        // Build feedback message
+        let assistantMessage = `I've generated production-ready ${selectedDialect.toUpperCase()} SQL based on your approved logic and mappings.`;
+        
+        // Add validation status
+        if (processed.isValid) {
+          assistantMessage += '\n\n✅ **Validation**: All table and column references validated against schema.';
+        } else if (processed.errors.length > 0) {
+          assistantMessage += `\n\n❌ **Validation Errors**: ${processed.errors.length} error(s) found:\n`;
+          assistantMessage += processed.errors.map(e => `- ${e.message}`).join('\n');
         }
-        assistantMessage += ' Feel free to ask for any modifications!';
+        
+        // Add warnings
+        if (processed.warnings.length > 0) {
+          assistantMessage += `\n\n⚠️ **Warnings**: ${processed.warnings.length} warning(s):\n`;
+          assistantMessage += processed.warnings.slice(0, 3).map(w => `- ${w.message}`).join('\n');
+          if (processed.warnings.length > 3) {
+            assistantMessage += `\n- ... and ${processed.warnings.length - 3} more`;
+          }
+        }
+        
+        // Add optimization hints
+        if (processed.hints.length > 0) {
+          assistantMessage += `\n\n💡 **Optimization Hints**: ${processed.hints.length} suggestion(s) - see SQL comments for details.`;
+        }
+        
+        assistantMessage += '\n\nThe SQL is ready to paste directly into ' + (selectedDialect === 'athena' || selectedDialect === 'presto' ? 'AWS Athena' : selectedDialect.toUpperCase()) + '!';
         
         addChatMessage('assistant', assistantMessage);
         navigateGenerateStep(4);
@@ -8406,22 +8459,73 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
 
     // ==================== ERD RENDERING ====================
     function renderERD() {
+      window.Performance.metrics.renderCount++;
+      
       const graph = d3.select('#erd-graph');
-      graph.selectAll('*').remove();
+      
+      // Only clear if we have new data to render (performance optimization)
+      if (ERDState.tables.length === 0 && ERDState.relationships.length === 0) {
+        graph.selectAll('*').remove();
+        return;
+      }
+      
+      // Use requestAnimationFrame for smooth rendering with virtualization
+      requestAnimationFrame(() => {
+        // Update viewport for virtualization
+        if (ERDState.zoom) {
+          window.ERDVirtualizer.updateViewport(
+            document.getElementById('erd-canvas-container'),
+            ERDState.zoom
+          );
+        }
+        
+        // Calculate visibility
+        window.ERDVirtualizer.calculateVisibility(ERDState.tables, ERDState.relationships);
+        
+        // Clear only elements that are no longer visible
+        const allTableElements = graph.selectAll('.erd-table-node');
+        const allRelElements = graph.selectAll('.erd-relationship');
+        
+        allTableElements.each(function(d) {
+          if (!window.ERDVirtualizer.visibleTables.has(d.id)) {
+            d3.select(this).remove();
+          }
+        });
+        
+        allRelElements.each(function(d) {
+          if (!window.ERDVirtualizer.visibleRelationships.has(d.id)) {
+            d3.select(this).remove();
+          }
+        });
 
-      // Render relationships first (behind tables)
-      renderRelationships(graph);
+        // Render relationships first (behind tables)
+        renderRelationships(graph);
 
-      // Render tables
-      renderTables(graph);
+        // Render tables
+        renderTables(graph);
 
-      // Update minimap
-      updateMinimap();
+        // Update minimap
+        updateMinimap();
+        
+        // Update virtualizer state
+        window.ERDVirtualizer.updateLastRendered();
+        
+        // Log performance metrics
+        const metrics = window.ERDVirtualizer.getMetrics();
+        if (metrics.virtualizationEnabled) {
+          console.log(`ERD Virtualization: ${metrics.visibleTables}/${metrics.totalTables} tables visible`);
+        }
+      });
     }
 
     function renderTables(graph) {
+      // Filter tables based on virtualization
+      const tablesToRender = ERDState.tables.filter(table => 
+        window.ERDVirtualizer.visibleTables.has(table.id)
+      );
+      
       const tableGroups = graph.selectAll('.erd-table-node')
-        .data(ERDState.tables, d => d.id)
+        .data(tablesToRender, d => d.id)
         .join('g')
         .attr('class', d => {
           let classes = 'erd-table-node';
@@ -8690,7 +8794,12 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
     }
 
     function renderRelationships(graph) {
-      ERDState.relationships.forEach(rel => {
+      // Filter relationships based on virtualization
+      const relationshipsToRender = ERDState.relationships.filter(rel => 
+        window.ERDVirtualizer.visibleRelationships.has(rel.id)
+      );
+      
+      relationshipsToRender.forEach(rel => {
         const sourceTable = ERDState.tables.find(t => t.id === rel.from.table || t.name === rel.from.table);
         const targetTable = ERDState.tables.find(t => t.id === rel.to.table || t.name === rel.to.table);
         
@@ -8771,7 +8880,7 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
       d.x = event.x;
       d.y = event.y;
       d3.select(this).attr('transform', `translate(${d.x}, ${d.y})`);
-      renderERD();
+      debouncedRenderERD();
     }
 
     function dragEnded(event, d) {
@@ -8788,7 +8897,7 @@ Provide the updated ${targetDialect} code. Return ONLY the modified code, no exp
         ERDState.selectedRelationship = null;
         openTableSidePanel(tableId);
       }
-      renderERD();
+      debouncedRenderERD();
     }
 
     function selectRelationship(relId) {
@@ -9794,20 +9903,58 @@ LIMIT 100;`;
     }
     
     function generateFromTemplate(template) {
-      // Try to auto-fill variables from ERD
-      const filledTemplate = autoFillTemplateVariables(template);
+      // Use Enhanced Template System for smart auto-fill
+      const enhancedTemplates = new window.EnhancedTemplateSystem();
+      enhancedTemplates.setSchemaContext(ERDState.tables, ERDState.relationships);
       
-      if (filledTemplate.missingVariables.length === 0) {
-        showSQLPreview(filledTemplate.sql, `Generated: ${template.name}`);
-        navigator.clipboard.writeText(filledTemplate.sql);
-        showToast('SQL generated and copied to clipboard', 'success');
+      const templateKey = template.key || 'custom';
+      const result = enhancedTemplates.autoFillTemplate(templateKey, {});
+      
+      // Apply Smart Code Generator for production-ready output
+      const generator = new window.SmartCodeGenerator(AppState.selectedDialect || 'presto');
+      generator.setSchemaContext(ERDState.tables, ERDState.relationships, AppState.schemaColumns);
+      
+      const processed = generator.generateProductionSQL(result.sql, result.mappings, {
+        addComments: true,
+        addOptimizationHints: true,
+        validateSchema: true,
+        formatCode: true,
+        addMetadata: true,
+        metadata: {
+          title: template.name,
+          description: template.description,
+          author: 'SQL Copilot - Enhanced Template'
+        }
+      });
+      
+      if (result.confidence > 70 && processed.isValid) {
+        // High confidence - show preview and copy
+        showSQLPreview(processed.sql, `Generated: ${template.name}`);
+        navigator.clipboard.writeText(processed.sql);
+        
+        let message = `✨ SQL generated with ${result.confidence}% confidence and copied to clipboard!`;
+        if (processed.hints.length > 0) {
+          message += `\n\n💡 ${processed.hints.length} optimization hint(s) included in comments.`;
+        }
+        
+        showToast(message, 'success');
+        document.getElementById('template-library-modal').remove();
       } else {
-        // Show variable mapping UI
-        showVariableMappingUI(template, filledTemplate);
+        // Lower confidence or validation issues - show mapping UI
+        showVariableMappingUI(template, result, processed);
       }
     }
     
     function autoFillTemplateVariables(template) {
+      // Legacy function - use Enhanced Template System instead
+      const enhancedTemplates = new window.EnhancedTemplateSystem();
+      enhancedTemplates.setSchemaContext(ERDState.tables, ERDState.relationships);
+      
+      const templateKey = template.key || 'custom';
+      return enhancedTemplates.autoFillTemplate(templateKey, {});
+    }
+    
+    function legacyAutoFill(template) {
       let sql = template.template;
       const missingVariables = [];
       const mappings = {};
@@ -11729,6 +11876,18 @@ If action is unknown, set message to explain what went wrong.`,
       // Update header
       document.getElementById('side-panel-icon').textContent = 'table_chart';
       document.getElementById('side-panel-title').textContent = 'Table: ' + table.name;
+      
+      // Add enhanced analysis button if table has enhanced metadata
+      const enhancedBtn = document.getElementById('enhanced-analysis-btn');
+      if (enhancedBtn) {
+        const hasEnhancedData = table.enhancedMetadata || table.variableAnalysis || table.dependencyAnalysis;
+        enhancedBtn.classList.toggle('view-hidden', !hasEnhancedData);
+        enhancedBtn.onclick = () => {
+          const schema = AppState.schemaColumns.find(s => s.name === table.name) || 
+                        { enhancedMetadata: table.enhancedMetadata, variableAnalysis: table.variableAnalysis, dependencyAnalysis: table.dependencyAnalysis, columnLineage: table.columnLineage };
+          window.enhancedUI.showEnhancedTableDetails(table, schema);
+        };
+      }
 
       // Fill form
       document.getElementById('side-panel-table-name').value = table.name;
@@ -12727,16 +12886,29 @@ If action is unknown, set message to explain what went wrong.`,
         const parser = new SQLParser(AppState.selectedDialect || 'presto');
         const extractor = new SchemaExtractor();
         
-        // Parse SQL to IR
-        const ir = parser.parse(sql);
+        // Parse SQL to IR (with caching)
+        const ir = window.cachedParseSQL(sql);
         
         if (ir.type === 'ERROR') {
           console.warn('SQL parse error:', ir.errors);
           return null;
         }
         
+        // Build alias map for enhanced extraction
+        const aliasMap = extractor.buildAliasMap(ir);
+        
         // Extract schema from IR
         const schema = extractor.extract(ir, 'query_result');
+        
+        // Enhanced schema extraction with variable/dependency tracking
+        const enhancedExtractor = new window.EnhancedSchemaExtractor();
+        const enhancedSchema = enhancedExtractor.extractEnhancedSchema(sql, ir, aliasMap);
+        
+        // Merge enhanced data into schema
+        schema.enhancedMetadata = enhancedSchema;
+        schema.variableAnalysis = enhancedSchema.variableUsage;
+        schema.dependencyAnalysis = enhancedSchema.tableDependencies;
+        schema.columnLineage = enhancedSchema.columnLineage;
         
         // Use GraphBuilder to properly populate graph and extract relationships
         const graphBuilder = new GraphBuilder(new MetadataGraph());
@@ -14494,8 +14666,8 @@ If action is unknown, set message to explain what went wrong.`,
             }
           }
           
-          // Parse the file
-          const ir = parser.parse(file.content);
+          // Parse the file (with caching)
+          const ir = window.cachedParseSQL(file.content);
           
           if (ir.type === 'ERROR') {
             console.warn(`Parse error in ${file.path}:`, ir.errors);
@@ -14513,8 +14685,21 @@ If action is unknown, set message to explain what went wrong.`,
           const targetTable = ir.targetTable || ir.targetView || {};
           const modelName = targetTable.table || fileName;
           
+          // Build alias map for enhanced extraction
+          const aliasMap = extractor.buildAliasMap(ir);
+          
           // Extract schema
           const schema = extractor.extract(ir, modelName, { layer: file.tableType });
+          
+          // Enhanced schema extraction with variable/dependency tracking
+          const enhancedExtractor = new window.EnhancedSchemaExtractor();
+          const enhancedSchema = enhancedExtractor.extractEnhancedSchema(file.content, ir, aliasMap);
+          
+          // Merge enhanced data into schema
+          schema.enhancedMetadata = enhancedSchema;
+          schema.variableAnalysis = enhancedSchema.variableUsage;
+          schema.dependencyAnalysis = enhancedSchema.tableDependencies;
+          schema.columnLineage = enhancedSchema.columnLineage;
           
           // Collect extraction warnings
           const extractorWarnings = extractor.getWarnings();
@@ -14526,6 +14711,15 @@ If action is unknown, set message to explain what went wrong.`,
                 message: w.message
               });
             }
+          }
+          
+          // Add warnings for unused variables
+          if (enhancedSchema.unusedVariables.length > 0) {
+            addSchemaWarning('unusedVariables', {
+              model: fileName,
+              variables: enhancedSchema.unusedVariables,
+              message: `Found ${enhancedSchema.unusedVariables.length} unused variables: ${enhancedSchema.unusedVariables.join(', ')}`
+            });
           }
           
           // Enrich schema with file metadata
